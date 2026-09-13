@@ -1,8 +1,6 @@
 package dominio
-import ("fmt")
+import ("fmt"; "encoding/json"; "projeto_redes/protocolo")
 
-// TESTES
-// TESTES
 func TestBuscarItinerarios() {
 	gerenciador := NovoGerenciador()
 
@@ -80,5 +78,33 @@ func TestReservarItinerario() {
 	}
 	
 }
-// TESTES
-// TESTES
+
+func TestRequisicao(){
+	req := protocolo.Requisicao{
+		TipoAcao:    "BUSCAR_ITINERARIO",
+		TipoUsuario: "passageiro",
+		IDUsuario:   "maria_123",
+		Origem:      "Feira",
+		Destino:     "Salvador",
+		HorarioMin:  800,
+	}
+
+	// 2. Transformando a Struct em JSON (Marshal)
+	dadosBytes, err := json.Marshal(req)
+	if err != nil {
+		fmt.Println("Erro ao gerar JSON:", err)
+		return
+	}
+
+	fmt.Println("--- Mensagem enviada pelo Socket (JSON Puro) ---")
+	fmt.Println(string(dadosBytes))
+
+	// 3. Simulando a recepção no Servidor: convertendo de volta para Struct (Unmarshal)
+	var reqRecebida protocolo.Requisicao
+	json.Unmarshal(dadosBytes, &reqRecebida)
+
+	fmt.Println("\n--- Servidor leu a Struct convertida ---")
+	fmt.Printf("Ação solicitada: %s por %s\n", reqRecebida.TipoAcao, reqRecebida.IDUsuario)
+	fmt.Printf("De: %s -> Para: %s\n", reqRecebida.Origem, reqRecebida.Destino)
+
+}

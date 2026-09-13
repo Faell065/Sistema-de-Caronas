@@ -10,7 +10,7 @@ type Requisicao struct {
 	HorarioMin   int    `json:"horario_min,omitempty"`  // Usado na busca
 	IDsTrechos   []string `json:"ids_trechos,omitempty"`// Usado na reserva
 }
-
+// observação: os campos com `omitempty` são opcionais e só aparecem no JSON se tiverem valor
 // Resposta representa o envelope padrão que o servidor devolve para o cliente
 type Resposta struct {
 	Sucesso   bool   `json:"sucesso"`

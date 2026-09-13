@@ -5,7 +5,7 @@ import (
 
 func main() {
 	//TestBuscarItinerarios()
-	dominio.TestReservarItinerario()
+	dominio.TestRequisicao()
 
 	
 }
