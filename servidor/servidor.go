@@ -3,6 +3,7 @@ package servidor
 import (
 	"fmt"
 	"bufio"
+	"time"
 	"encoding/json"
 	"net"
 	"projeto_redes/dominio" 
@@ -84,6 +85,26 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 			resp = protocolo.Resposta{Sucesso: false, Mensagem: errReserva.Error()}
 		} else {
 			resp = protocolo.Resposta{Sucesso: true, Mensagem: "Reserva realizada com sucesso!"}
+		}
+
+	case "CADASTRAR_ROTA":
+		novoTrecho := dominio.Trecho{
+			ID:               fmt.Sprintf("t_%d", time.Now().UnixNano()), // Gera um ID único simples baseado no tempo
+			MotoristaID:      req.IDUsuario,
+			Origem:           req.Origem,
+			Destino:          req.Destino,
+			HorarioSaida:     800,  // Valor de exemplo temporário
+			HorarioChegada:   1000, // Valor de exemplo temporário
+			AssentosTotais:   4,
+			AssentosOcupados: 0,
+		}
+
+		// Adiciona no Gerenciador (protegido por Mutex)
+		s.Gerenciador.AdicionarTrechos([]dominio.Trecho{novoTrecho})
+
+		resp = protocolo.Resposta{
+			Sucesso:  true,
+			Mensagem: fmt.Sprintf("Rota de %s para %s cadastrada com sucesso pelo motorista %s!", req.Origem, req.Destino, req.IDUsuario),
 		}
 
 	default:
