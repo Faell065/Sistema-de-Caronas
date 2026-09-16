@@ -8,6 +8,9 @@ type Requisicao struct {
 	Origem       string `json:"origem,omitempty"`       // Usado na busca
 	Destino      string `json:"destino,omitempty"`      // Usado na busca
 	HorarioMin   int    `json:"horario_min,omitempty"`  // Usado na busca
+	HorarioSaida     int      `json:"horario_saida,omitempty"`     // Add para o cadastro
+	HorarioChegada   int      `json:"horario_chegada,omitempty"`   // Add para o cadastro
+	AssentosTotais   int      `json:"assentos_totais,omitempty"`   // Add para o cadastro
 	IDsTrechos   []string `json:"ids_trechos,omitempty"`// Usado na reserva
 }
 // observação: os campos com `omitempty` são opcionais e só aparecem no JSON se tiverem valor

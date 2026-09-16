@@ -88,14 +88,15 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "CADASTRAR_ROTA":
+		// Cria o trecho utilizando os dados reais recebidos da requisição do cliente
 		novoTrecho := dominio.Trecho{
-			ID:               fmt.Sprintf("t_%d", time.Now().UnixNano()), // Gera um ID único simples baseado no tempo
+			ID:               fmt.Sprintf("t_%d", time.Now().UnixNano()),
 			MotoristaID:      req.IDUsuario,
 			Origem:           req.Origem,
 			Destino:          req.Destino,
-			HorarioSaida:     800,  // Valor de exemplo temporário
-			HorarioChegada:   1000, // Valor de exemplo temporário
-			AssentosTotais:   4,
+			HorarioSaida:     req.HorarioSaida,     
+			HorarioChegada:   req.HorarioChegada,   
+			AssentosTotais:   req.AssentosTotais,   
 			AssentosOcupados: 0,
 		}
 
@@ -104,7 +105,8 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 
 		resp = protocolo.Resposta{
 			Sucesso:  true,
-			Mensagem: fmt.Sprintf("Rota de %s para %s cadastrada com sucesso pelo motorista %s!", req.Origem, req.Destino, req.IDUsuario),
+			Mensagem: fmt.Sprintf("Rota de %s para %s (%d - %d) com %d assentos cadastrada com sucesso!", 
+				req.Origem, req.Destino, req.HorarioSaida, req.HorarioChegada, req.AssentosTotais),
 		}
 
 	default:

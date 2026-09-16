@@ -100,13 +100,31 @@ func menuMotorista(reader *bufio.Reader) {
 		destino, _ := reader.ReadString('\n')
 		destino = strings.TrimSpace(destino)
 
-		// Monta a requisição para cadastrar (vamos integrar no servidor em breve)
+		fmt.Print("Horario de Saida (ex: 800 para 08:00): ")
+		var horarioSaida int
+		fmt.Scanln(&horarioSaida)
+
+		fmt.Print("Horario de Chegada (ex: 1000 para 10:00): ")
+		var horarioChegada int
+		fmt.Scanln(&horarioChegada)
+
+		fmt.Print("Quantidade de Assentos Totais: ")
+		var assentosTotais int
+		fmt.Scanln(&assentosTotais)
+
+		// Limpa o buffer do teclado após o Scanln
+		reader.ReadString('\n') 
+
+		// Monta a requisição com os dados reais informados
 		req := protocolo.Requisicao{
-			TipoAcao:    "CADASTRAR_ROTA",
-			TipoUsuario: "motorista",
-			IDUsuario:   idMotorista,
-			Origem:      origem,
-			Destino:     destino,
+			TipoAcao:       "CADASTRAR_ROTA",
+			TipoUsuario:    "motorista",
+			IDUsuario:      idMotorista,
+			Origem:         origem,
+			Destino:        destino,
+			HorarioSaida:   horarioSaida,
+			HorarioChegada: horarioChegada,
+			AssentosTotais: assentosTotais,
 		}
 
 		resp, err := enviarRequisicao(req)
