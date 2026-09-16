@@ -5,6 +5,9 @@ type Requisicao struct {
 	TipoAcao     string `json:"tipo_acao"`     // Ex: "BUSCAR_ITINERARIO", "RESERVAR_TRECHO"
 	TipoUsuario  string `json:"tipo_usuario"`  // Ex: "passageiro", "motorista"
 	IDUsuario    string `json:"id_usuario"`    // Identificador único de quem envia
+	Nome           string   `json:"nome,omitempty"`            // Nome informado no cadastro
+	Senha          string   `json:"senha,omitempty"`           // Senha para cadastro e login
+	Tipo           string   `json:"tipo,omitempty"`            // "motorista" ou "passageiro"
 	Origem       string `json:"origem,omitempty"`       // Usado na busca
 	Destino      string `json:"destino,omitempty"`      // Usado na busca
 	HorarioMin   int    `json:"horario_min,omitempty"`  // Usado na busca

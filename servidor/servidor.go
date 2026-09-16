@@ -68,6 +68,32 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 	var resp protocolo.Resposta
 
 	switch req.TipoAcao {
+
+	case "CADASTRAR_USUARIO":
+		// Chama o gerenciador para criar o usuário e gerar o ID único
+		idGerado, err := s.Gerenciador.CadastrarUsuario(req.Nome, req.Senha, req.Tipo)
+		if err != nil {
+			resp = protocolo.Resposta{Sucesso: false, Mensagem: err.Error()}
+		} else {
+			resp = protocolo.Resposta{
+				Sucesso:   true,
+				Mensagem:  fmt.Sprintf("Usuário cadastrado com sucesso! Seu ID gerado é: %s", idGerado),
+				DadosJSON: idGerado, // Retorna o ID gerado para que o cliente possa guardá-lo
+			}
+		}
+
+	case "LOGIN":
+		// Valida as credenciais no gerenciador
+		valido, usuario := s.Gerenciador.Autenticar(req.IDUsuario, req.Senha)
+		if !valido {
+			resp = protocolo.Resposta{Sucesso: false, Mensagem: "ID ou senha incorretos."}
+		} else {
+			resp = protocolo.Resposta{
+				Sucesso:  true,
+				Mensagem: fmt.Sprintf("Login realizado com sucesso! Bem-vindo, %s.", usuario.Nome),
+			}
+		}
+
 	case "BUSCAR_ITINERARIO":
 		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.HorarioMin)
 		

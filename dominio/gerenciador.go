@@ -1,5 +1,12 @@
 package dominio
-import ("fmt"; "sync")
+import (
+	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
 
 
 
@@ -26,14 +33,65 @@ func CriarRota(id string, motoristaID string, paradas []string, assentos int) Ro
 type GerenciadorDeRotas struct {
 	mu sync.RWMutex // minha variavel de controle de concorrencia, usada para acesso seguro dados compartilhados entre goroutines, um mutex de leitura e escrita, para que eu possa ler e escrever de forma segura 
 	Trechos map[string] *Trecho
+	Usuarios map[string]*Usuario // Novo mapa para gerenciar usuários em memória
 }
 
 // função para eu criar a instancia do GerenciadorDeRotas, que é um mapa de trechos, onde a chave é uma string (ID do trecho) e o valor é um ponteiro para o trecho correspondente.
 func NovoGerenciador() *GerenciadorDeRotas {
-	return &GerenciadorDeRotas{ Trechos: make(map[string]*Trecho)}
+	return &GerenciadorDeRotas{ 
+		Trechos: make(map[string]*Trecho),
+		Usuarios: make(map[string]*Usuario)}
 }
 
 // METODOS GERENCIADOR DE ROTAS 
+
+// USUARIO
+// CadastrarUsuario gera um ID único (nome + números aleatórios) e salva o usuário
+func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	// Normaliza o nome para o formato base do ID (ex: "João Silva" -> "joao_silva")
+	baseNome := strings.ToLower(strings.ReplaceAll(nome, " ", "_"))
+	
+	// Gera um número aleatório de 4 dígitos para garantir unicidade
+	rand.Seed(time.Now().UnixNano())
+	sufixo := rand.Intn(8999) + 1000
+	idGerado := fmt.Sprintf("%s_%d", baseNome, sufixo)
+
+	// Verifica se por coincidência o ID já existe (raro, mas seguro)
+	if _, existe := g.Usuarios[idGerado]; existe {
+		idGerado = fmt.Sprintf("%s_%s", idGerado, strconv.FormatInt(time.Now().UnixNano()%100, 10))
+	}
+
+	g.Usuarios[idGerado] = &Usuario{
+	ID:    idGerado,
+	Nome:  nome,
+	Senha: senha,
+	Tipo:  tipo,
+	}
+
+	return idGerado, nil
+}
+// USUARIO
+
+// Autenticar valida se o ID e a senha conferem
+func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha string) (bool, *Usuario) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	usuario, existe := g.Usuarios[idUsuario]
+	if !existe {
+		return false, nil
+	}
+
+	if usuario.Senha != senha {
+		return false, nil
+	}
+
+	return true, usuario
+}
+
 func (g *GerenciadorDeRotas) AdicionarTrechos(novosTrechos []Trecho) {
 	g.mu.Lock() // trava o mutex para escrita, garantindo que nenhuma outra goroutine possa acessar os dados enquanto estou escrevendo
 	defer g.mu.Unlock()
@@ -102,9 +160,7 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino string, horarioMi
 	buscar(origem, horarioMinimo)
 	return resultados
 }
-// ITNERARIO
-// ITNERARIO
-// ITNERARIO
+
 
 
 // ReservarItinerario tenta reservar 1 assento em todos os trechos da lista de forma atômica
@@ -144,6 +200,9 @@ func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) error {
 	return nil // Reserva realizada com sucesso!
 }
 
+// ITNERARIO
+// ITNERARIO
+// ITNERARIO
 
 
 
