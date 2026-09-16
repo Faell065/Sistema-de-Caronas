@@ -1,9 +1,9 @@
+//Sistema-de-Caronas/servidor/servidor.go
 package servidor
 
 import (
 	"fmt"
 	"bufio"
-	"time"
 	"encoding/json"
 	"net"
 	"projeto_redes/dominio" 
@@ -95,44 +95,49 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "BUSCAR_ITINERARIO":
-		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.HorarioMin)
+		// Busca itinerários com base na origem, destino e data informados
+		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.Data)
 		
-		// Converte os resultados encontrados em JSON para enviar de volta
-		dadosJson, _ := json.Marshal(itinerarios)
+		dadosBytes, _ := json.Marshal(itinerarios)
 		resp = protocolo.Resposta{
 			Sucesso:   true,
-			Mensagem:  fmt.Sprintf("Encontrados %d itinerários", len(itinerarios)),
-			DadosJSON: string(dadosJson),
+			Mensagem:  fmt.Sprintf("Encontrados %d itinerários.", len(itinerarios)),
+			DadosJSON: string(dadosBytes),
 		}
 
 	case "RESERVAR_ITINERARIO":
-		errReserva := s.Gerenciador.ReservarItinerario(req.IDsTrechos)
-		if errReserva != nil {
-			resp = protocolo.Resposta{Sucesso: false, Mensagem: errReserva.Error()}
-		} else {
-			resp = protocolo.Resposta{Sucesso: true, Mensagem: "Reserva realizada com sucesso!"}
+		sucesso, msg := s.Gerenciador.ReservarItinerario(req.IDsTrechos)
+		resp = protocolo.Resposta{
+			Sucesso:  sucesso,
+			Mensagem: msg,
 		}
 
 	case "CADASTRAR_ROTA":
-		// Cria o trecho utilizando os dados reais recebidos da requisição do cliente
-		novoTrecho := dominio.Trecho{
-			ID:               fmt.Sprintf("t_%d", time.Now().UnixNano()),
-			MotoristaID:      req.IDUsuario,
-			Origem:           req.Origem,
-			Destino:          req.Destino,
-			HorarioSaida:     req.HorarioSaida,     
-			HorarioChegada:   req.HorarioChegada,   
-			AssentosTotais:   req.AssentosTotais,   
-			AssentosOcupados: 0,
+		// Converte as paradas do protocolo para o formato do domínio
+		var paradasDominio []dominio.ParadaRota
+		for _, p := range req.Paradas {
+			paradasDominio = append(paradasDominio, dominio.ParadaRota{
+				Cidade:         p.Cidade,
+				HorarioSaida:   p.HorarioSaida,
+				AssentosTotais: p.AssentosTotais,
+				Valor:          p.Valor,
+			})
 		}
 
-		// Adiciona no Gerenciador (protegido por Mutex)
-		s.Gerenciador.AdicionarTrechos([]dominio.Trecho{novoTrecho})
+		// Cadastra a rota completa e gera os trechos fragmentados com assentos e preços independentes
+		idsGerados := s.Gerenciador.CadastrarRotaCompleta(req.IDUsuario, req.Data, paradasDominio)
 
-		resp = protocolo.Resposta{
-			Sucesso:  true,
-			Mensagem: fmt.Sprintf("Rota de %s para %s (%d - %d) com %d assentos cadastrada com sucesso!", 
-				req.Origem, req.Destino, req.HorarioSaida, req.HorarioChegada, req.AssentosTotais),
+		if len(idsGerados) == 0 {
+			resp = protocolo.Resposta{
+				Sucesso:  false,
+				Mensagem: "A rota precisa ter pelo menos origem e destino (2 paradas).",
+			}
+		} else {
+			resp = protocolo.Resposta{
+				Sucesso:   true,
+				Mensagem:  fmt.Sprintf("Rota cadastrada com sucesso! Foram gerados %d trechos independentes.", len(idsGerados)),
+				DadosJSON: fmt.Sprintf("%v", idsGerados),
+			}
 		}
 
 	default:

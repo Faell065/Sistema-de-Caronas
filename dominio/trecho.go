@@ -1,19 +1,20 @@
+//Sistema-de-Caronas/dominio/trecho.go
 package dominio
 
 //apenas os modelos de dados
 
 type Trecho struct {
-	ID string
-	RotaID string
-	MotoristaID string
-	Origem string 
-	Destino string
-	AssentosTotais int
-	AssentosOcupados int
-	HorarioSaida int 
-	HorarioChegada int
-	
-
+	ID               string  `json:"id"`
+	RotaID           string  `json:"rota_id"`
+	MotoristaID      string  `json:"motorista_id"`
+	Origem           string  `json:"origem"`
+	Destino          string  `json:"destino"`
+	Data             string  `json:"data"`              // Nova: Data da viagem (ex: "2026-06-10")
+	HorarioSaida     int     `json:"horario_saida"`     // Ex: 800
+	HorarioChegada   int     `json:"horario_chegada"`   // Ex: 930
+	AssentosTotais   int     `json:"assentos_totais"`
+	AssentosOcupados int     `json:"assentos_ocupados"`
+	Valor            float64 `json:"valor"`             // Novo: Preço específico deste trecho
 }
 
 // Rota é a viagem completa de um motorista, composta por vários trechos
@@ -25,8 +26,12 @@ type Rota struct {
 
 // Itinerario representa o caminho encontrado para o passageiro
 type Itinerario struct {
-	Trechos []Trecho
+	ID                string   `json:"id"`
+	Trechos           []Trecho `json:"trechos"`
+	ValorTotal        float64  `json:"valor_total"`
+	AssentosDisponivel int     `json:"assentos_disponivel"` // Mínimo de vagas entre os trechos do itinerario
 }
+
 
 
 // Usuario representa qualquer pessoa cadastrada (motorista ou passageiro)

@@ -1,3 +1,4 @@
+//Sistema-de-Caronas/dominio/gerenciador.go
 package dominio
 import (
 	"fmt"
@@ -116,88 +117,104 @@ func (g *GerenciadorDeRotas) ObterTrecho(id string) (*Trecho, bool) {
 // ITNERARIO
 // Itinerario é uma combinação de 1 ou mais trechos que levam da Origem ao Destino
 
-func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino string, horarioMinimo int) []Itinerario {
-	g.mu.RLock()         // Trava apenas para LEITURA (múltiplas leituras simultâneas são permitidas)
+// BuscarItinerarios encontra caminhos (diretos ou múltiplos trechos) entre origem e destino para uma data
+func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []Itinerario {
+	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	var resultados []Itinerario
-	var caminhoAtual []Trecho
+	// Filtra apenas trechos da data correta
+	var trechosValidos []Trecho
+	for _, t := range g.Trechos {
+		if t.Data == data && t.AssentosOcupados < t.AssentosTotais {
+			trechosValidos = append(trechosValidos, *t)
+		}
+	}
 
-	// Função recursiva interna para busca em profundidade (DFS)
-	var buscar func(pontoAtual string, horaAtual int)
+	var itinerariosEncontrados []Itinerario
+
+	// Função recursiva interna para buscar caminhos (DFS)
+	var dfs func(cidadeAtual string, caminhoAtual []Trecho, visitados map[string]bool)
 	
-	buscar = func(pontoAtual string, horaAtual int) {
-		// Caso base: chegamos ao destino final desejado!
-		if pontoAtual == destino {
-			// Copiamos o caminho atual para os resultados
-			caminhoCopia := make([]Trecho, len(caminhoAtual))
-			copy(caminhoCopia, caminhoAtual)
-			resultados = append(resultados, Itinerario{Trechos: caminhoCopia})
+	dfs = func(cidadeAtual string, caminhoAtual []Trecho, visitados map[string]bool) {
+		// Se chegamos ao destino desejado, salvamos o itinerário válido
+		if cidadeAtual == destino && len(caminhoAtual) > 0 {
+			var valorTotal float64
+			minAssentos := 999999
+
+			for _, t := range caminhoAtual {
+				valorTotal += t.Valor
+				vagasRestantes := t.AssentosTotais - t.AssentosOcupados
+				if vagasRestantes < minAssentos {
+					minAssentos = vagasRestantes
+				}
+			}
+
+			// Gera um ID único para o itinerário composto
+			itinerarioID := fmt.Sprintf("itin_%d", time.Now().UnixNano())
+			
+			itinerariosEncontrados = append(itinerariosEncontrados, Itinerario{
+				ID:                 itinerarioID,
+				Trechos:            caminhoAtual,
+				ValorTotal:         valorTotal,
+				AssentosDisponivel: minAssentos,
+			})
 			return
 		}
 
-		// Varre todos os trechos do gerenciador procurando conexões válidas
-		for _, t := range g.Trechos {
-			// Regras de Validação da Aresta:
-			// 1. Origem bate com onde estamos
-			// 2. Horário de saída é DEPOIS do horário em que chegamos no ponto atual
-			// 3. Tem pelo menos 1 assento vago
-			if t.Origem == pontoAtual && t.HorarioSaida >= horaAtual && (t.AssentosTotais - t.AssentosOcupados) > 0 {
+		// Procura o próximo trecho a partir da cidade atual
+		for _, t := range trechosValidos {
+			if t.Origem == cidadeAtual && !visitados[t.ID] {
+				// Evita ciclos no grafo
+				visitados[t.ID] = true
 				
-				// Avança no grafo
-				caminhoAtual = append(caminhoAtual, *t)
+				// O horário de saída do próximo trecho deve ser posterior ou igual à chegada do trecho anterior (se houver)
+				if len(caminhoAtual) > 0 {
+					trechoAnterior := caminhoAtual[len(caminhoAtual)-1]
+					if t.HorarioSaida < trechoAnterior.HorarioChegada {
+						visitados[t.ID] = false
+						continue
+					}
+				}
+
+				dfs(t.Destino, append(caminhoAtual, t), visitados)
 				
-				// Recursão: próximo ponto é o destino deste trecho, e a nova hora limite é a chegada
-				buscar(t.Destino, t.HorarioChegada)
-				
-				// Backtracking: remove o último trecho para testar outros caminhos
-				caminhoAtual = caminhoAtual[:len(caminhoAtual)-1]
+				// Backtrack
+				visitados[t.ID] = false
 			}
 		}
 	}
 
-	// Inicia a busca a partir da origem do passageiro
-	buscar(origem, horarioMinimo)
-	return resultados
+	// Inicia a busca recursiva a partir da origem informada
+	visitadosMap := make(map[string]bool)
+	dfs(origem, []Trecho{}, visitadosMap)
+
+	return itinerariosEncontrados
 }
 
 
 
-// ReservarItinerario tenta reservar 1 assento em todos os trechos da lista de forma atômica
-func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) error {
-	// 1. Adquire a trava EXCLUSIVA de escrita (Lock)
-	// Nenhuma outra goroutine pode ler ou alterar o gerenciador enquanto reservamos
+// ReservarItinerario tenta reservar assentos em todos os trechos de um itinerário de forma atômica
+func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, string) {
 	g.mu.Lock()
-	defer g.mu.Unlock() // Destrava automaticamente ao final da função
+	defer g.mu.Unlock()
 
-	// 2. FASE 1: Validação (Verificar se todos os trechos existem e têm vaga)
-	var trechosParaReservar []*Trecho
-
-	for _, id := range idsTrechos {
-		trecho, existe := g.Trechos[id]
-		
-		// Validação A: Trecho existe no mapa?
+	// 1. Validação prévia: Verifica se TODOS os trechos ainda possuem vagas
+	for _, idTrecho := range idsTrechos {
+		trecho, existe := g.Trechos[idTrecho]
 		if !existe {
-			return fmt.Errorf("trecho com ID '%s' não foi encontrado", id)
+			return false, fmt.Sprintf("Trecho %s não existe mais.", idTrecho)
 		}
-
-		// Validação B: Tem assento livre?
 		if trecho.AssentosOcupados >= trecho.AssentosTotais {
-			return fmt.Errorf("trecho '%s' (%s -> %s) não possui vagas disponíveis", 
-				id, trecho.Origem, trecho.Destino)
+			return false, fmt.Sprintf("O trecho de %s para %s esgotou as vagas!", trecho.Origem, trecho.Destino)
 		}
-
-		// Salva o ponteiro do trecho aprovado na lista temporária
-		trechosParaReservar = append(trechosParaReservar, trecho)
 	}
 
-	// 3. FASE 2: Efetivação da Reserva (Atomicidade)
-	// Se chegou aqui, TODOS os trechos têm vaga garantida!
-	for _, trecho := range trechosParaReservar {
-		trecho.AssentosOcupados++
+	// 2. Efetivação: Como todos têm vagas, incrementa os assentos ocupados de todos os trechos atomicamente
+	for _, idTrecho := range idsTrechos {
+		g.Trechos[idTrecho].AssentosOcupados++
 	}
 
-	return nil // Reserva realizada com sucesso!
+	return true, "Itinerario reservado com sucesso!"
 }
 
 // ITNERARIO
@@ -206,3 +223,60 @@ func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) error {
 
 
 
+
+
+
+
+
+
+
+
+
+
+// ParadaRota representa cada cidade no caminho e as condições daquele trecho específico que se inicia nela
+type ParadaRota struct {
+	Cidade          string  `json:"cidade"`
+	HorarioSaida    int     `json:"horario_saida"`
+	AssentosTotais  int     `json:"assentos_totais"` // Assentos específicos para o trecho que sai daqui
+	Valor           float64 `json:"valor"`           // Valor para o trecho que sai daqui
+}
+
+// CadastrarRotaCompleta processa uma rota contínua e a fragmenta em trechos atômicos
+func (g *GerenciadorDeRotas) CadastrarRotaCompleta(
+	motoristaID string,
+	data string,
+	paradas []ParadaRota, // Sequência de cidades e os dados de seus respectivos trechos de saída
+) []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	rotaID := fmt.Sprintf("rota_%d", time.Now().UnixNano())
+	var idsTrechosGerados []string
+
+	// Precisamos de pelo menos uma origem e um destino (2 paradas)
+	for i := 0; i < len(paradas)-1; i++ {
+		origemAtual := paradas[i]
+		destinoSeguinte := paradas[i+1]
+
+		trechoID := fmt.Sprintf("t_%d_%d", time.Now().UnixNano(), i)
+
+		trecho := &Trecho{
+			ID:               trechoID,
+			RotaID:           rotaID,
+			MotoristaID:      motoristaID,
+			Origem:           origemAtual.Cidade,
+			Destino:          destinoSeguinte.Cidade,
+			Data:             data,
+			HorarioSaida:     origemAtual.HorarioSaida,
+			HorarioChegada:   destinoSeguinte.HorarioSaida, // Usamos o horário de saída da próxima parada como chegada estimada
+			AssentosTotais:   origemAtual.AssentosTotais,   // Assentos independentes deste trecho
+			AssentosOcupados: 0,
+			Valor:            origemAtual.Valor,            // Valor independente deste trecho
+		}
+
+		g.Trechos[trechoID] = trecho
+		idsTrechosGerados = append(idsTrechosGerados, trechoID)
+	}
+
+	return idsTrechosGerados
+}

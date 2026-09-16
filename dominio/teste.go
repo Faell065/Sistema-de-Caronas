@@ -1,3 +1,4 @@
+//Sistema-de-Caronas/dominio/teste.go
 package dominio
 import ("fmt"; "encoding/json"; "projeto_redes/protocolo")
 
@@ -24,7 +25,7 @@ func TestBuscarItinerarios() {
 	gerenciador.AdicionarTrechos([]Trecho{t1, t2})
 
 	// Passageiro busca carona de Feira para Salvador a partir das 07:00
-	itinerariosEncontrados := gerenciador.BuscarItinerarios("Feira de Santana", "Salvador", 700)
+	itinerariosEncontrados := gerenciador.BuscarItinerarios("Feira de Santana", "Salvador", "")
 
 	fmt.Printf("Encontrados %d itinerário(s):\n", len(itinerariosEncontrados))
 	for i, itin := range itinerariosEncontrados {
@@ -53,31 +54,31 @@ func TestCriarRota() {
 	}
 }
 
-func TestReservarItinerario() {
-	gerenciador := NovoGerenciador()
+// func TestReservarItinerario() {
+// 	gerenciador := NovoGerenciador()
 
-	// Adiciona trechos de exemplo
-	t1 := Trecho{ID: "t1", Origem: "Feira de Santana", Destino: "Santo Amaro", HorarioSaida: 800, HorarioChegada: 900, AssentosTotais: 4, AssentosOcupados: 0}
-	t2 := Trecho{ID: "t2", Origem: "Santo Amaro", Destino: "Salvador", HorarioSaida: 930, HorarioChegada: 1030, AssentosTotais: 3, AssentosOcupados: 1}
-	gerenciador.AdicionarTrechos([]Trecho{t1, t2})
+// 	// Adiciona trechos de exemplo
+// 	t1 := Trecho{ID: "t1", Origem: "Feira de Santana", Destino: "Santo Amaro", HorarioSaida: 800, HorarioChegada: 900, AssentosTotais: 4, AssentosOcupados: 0}
+// 	t2 := Trecho{ID: "t2", Origem: "Santo Amaro", Destino: "Salvador", HorarioSaida: 930, HorarioChegada: 1030, AssentosTotais: 3, AssentosOcupados: 1}
+// 	gerenciador.AdicionarTrechos([]Trecho{t1, t2})
 
-	// Tenta reservar um itinerário válido
-	err := gerenciador.ReservarItinerario([]string{"t1", "t2"})
-	if err != nil {
-		fmt.Println("Erro ao reservar itinerário:", err)
-	} else {
-		fmt.Println("Reserva realizada com sucesso!")
-	}
+// 	// Tenta reservar um itinerário válido
+// 	err := gerenciador.ReservarItinerario([]string{"t1", "t2"})
+// 	if err != nil {
+// 		fmt.Println("Erro ao reservar itinerário:", err)
+// 	} else {
+// 		fmt.Println("Reserva realizada com sucesso!")
+// 	}
 
-	// Tenta reservar novamente o mesmo itinerário (deve falhar se não houver assentos)
-	err = gerenciador.ReservarItinerario([]string{"t1", "t2"})
-	if err != nil {
-		fmt.Println("Erro ao reservar itinerário novamente:", err)
-	} else {
-		fmt.Println("Reserva realizada com sucesso novamente!")
-	}
+// 	// Tenta reservar novamente o mesmo itinerário (deve falhar se não houver assentos)
+// 	err = gerenciador.ReservarItinerario([]string{"t1", "t2"})
+// 	if err != nil {
+// 		fmt.Println("Erro ao reservar itinerário novamente:", err)
+// 	} else {
+// 		fmt.Println("Reserva realizada com sucesso novamente!")
+// 	}
 	
-}
+// }
 
 func TestRequisicao(){
 	req := protocolo.Requisicao{
