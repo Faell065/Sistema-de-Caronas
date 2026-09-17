@@ -1,5 +1,5 @@
 # Estágio 1: Build da Aplicação em Go
-FROM golang:1.22-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /app
 
@@ -13,8 +13,8 @@ COPY cmd/servidor/ ./cmd/servidor/
 # Compila o binário estático
 RUN CGO_ENABLED=0 GOOS=linux go build -o servidor_exe ./cmd/servidor/main.go
 
-# Estágio 2: Imagem final leve (Scratch/Alpine)
-FROM alpine:latest
+# Estágio 2: Imagem final super leve e limpa
+FROM gcr.io/distroless/static-debian12
 
 WORKDIR /app
 
@@ -24,5 +24,5 @@ COPY --from=builder /app/servidor_exe .
 # Expõe a porta 8080
 EXPOSE 8080
 
-# Executa o servidor
-CMD ["./servidor_exe"]
+# Executa o servidor (em distroless usamos o caminho direto)
+CMD ["/app/servidor_exe"]

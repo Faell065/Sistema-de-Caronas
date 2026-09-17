@@ -37,5 +37,18 @@
     "assentos_totais": 4,
     "assentos_ocupados": 1,
     "valor": 30
+  },
+  "t_1789616108732013733_0": {
+    "id": "t_1789616108732013733_0",
+    "rota_id": "rota_1789616108732008383",
+    "motorista_id": "rafa_9639",
+    "origem": "sp",
+    "destino": "campinas",
+    "data": "18/09/2026",
+    "horario_saida": 1630,
+    "horario_chegada": 0,
+    "assentos_totais": 4,
+    "assentos_ocupados": 0,
+    "valor": 65
   }
 }
