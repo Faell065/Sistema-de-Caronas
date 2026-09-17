@@ -36,10 +36,10 @@ type Itinerario struct {
 
 // Usuario representa qualquer pessoa cadastrada (motorista ou passageiro)
 type Usuario struct {
-	ID    string // ID único gerado automaticamente (ex: joao_4892)
-	Nome  string // Nome informado pelo usuário
-	Senha string // Senha para login futuro
-	Tipo  string // "motorista" ou "passageiro"
+	ID    string  `json:"id"`    // ID único gerado automaticamente (ex: joao_4892)
+	Nome  string  `json:"nome"`  // Nome informado pelo usuário
+	Senha string  `json:"senha"` // Senha para login futuro
+	Tipo  string  `json:"tipo"`  // "motorista" ou "passageiro"
 }
 
 type Reserva struct {

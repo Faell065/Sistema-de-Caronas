@@ -40,11 +40,13 @@ type GerenciadorDeRotas struct {
 
 // função para eu criar a instancia do GerenciadorDeRotas, que é um mapa de trechos, onde a chave é uma string (ID do trecho) e o valor é um ponteiro para o trecho correspondente.
 func NovoGerenciador() *GerenciadorDeRotas {
-	return &GerenciadorDeRotas{ 
-		Trechos: make(map[string]*Trecho),
+	g := &GerenciadorDeRotas{
+		Trechos:  make(map[string]*Trecho),
 		Usuarios: make(map[string]*Usuario),
-		Reservas: make(map[string]*Reserva)}
-		
+		Reservas: make(map[string]*Reserva),
+	}
+	g.CarregarDados() // Restaura dados ao ligar o servidor
+	return g
 }
 
 // METODOS GERENCIADOR DE ROTAS 
@@ -75,6 +77,7 @@ func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string,
 	Tipo:  tipo,
 	}
 
+	g.SalvarDados() // Grava alteração no disco
 	return idGerado, nil
 }
 // USUARIO
@@ -272,7 +275,7 @@ func (g *GerenciadorDeRotas) CadastrarRotaCompleta(
 		g.Trechos[trechoID] = trecho
 		idsTrechosGerados = append(idsTrechosGerados, trechoID)
 	}
-
+	g.SalvarDados() // Grava alteração no disco
 	return idsTrechosGerados
 }
 
@@ -310,6 +313,7 @@ func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (
 	if !encontrou {
 		return false, "Rota não encontrada ou não pertence a este motorista."
 	}
+	g.SalvarDados() // Grava alteração no disco
 	return true, "Rota cancelada e removida com sucesso!"
 }
 
@@ -342,6 +346,7 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 		Data:         time.Now().Format("02/01/2006"),
 	}
 
+	g.SalvarDados() // Grava alteração no disco
 	return true, "Itinerário reservado com sucesso!", reservaID
 }
 
@@ -392,5 +397,6 @@ func (g *GerenciadorDeRotas) CancelarReservaPassageiro(passageiroID, reservaID s
 	}
 
 	delete(g.Reservas, reservaID)
+	g.SalvarDados() // Grava alteração no disco
 	return true, "Reserva cancelada com sucesso! As vagas foram liberadas no sistema."
 }

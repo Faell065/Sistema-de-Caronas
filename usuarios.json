@@ -1,0 +1,14 @@
+{
+  "dan_1866": {
+    "id": "dan_1866",
+    "nome": "dan",
+    "senha": "123",
+    "tipo": "passageiro"
+  },
+  "rafa_9639": {
+    "id": "rafa_9639",
+    "nome": "rafa",
+    "senha": "123",
+    "tipo": "motorista"
+  }
+}

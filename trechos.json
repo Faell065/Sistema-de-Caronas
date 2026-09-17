@@ -1,0 +1,41 @@
+{
+  "t_1789613281685763900_0": {
+    "id": "t_1789613281685763900_0",
+    "rota_id": "rota_1789613281685763900",
+    "motorista_id": "rafa_9639",
+    "origem": "feira de santana",
+    "destino": "salvador",
+    "data": "17/09/2026",
+    "horario_saida": 1330,
+    "horario_chegada": 1430,
+    "assentos_totais": 5,
+    "assentos_ocupados": 0,
+    "valor": 20
+  },
+  "t_1789613281685763900_1": {
+    "id": "t_1789613281685763900_1",
+    "rota_id": "rota_1789613281685763900",
+    "motorista_id": "rafa_9639",
+    "origem": "salvador",
+    "destino": "ilheus",
+    "data": "17/09/2026",
+    "horario_saida": 1430,
+    "horario_chegada": 1540,
+    "assentos_totais": 5,
+    "assentos_ocupados": 1,
+    "valor": 35.4
+  },
+  "t_1789613281685763900_2": {
+    "id": "t_1789613281685763900_2",
+    "rota_id": "rota_1789613281685763900",
+    "motorista_id": "rafa_9639",
+    "origem": "ilheus",
+    "destino": "amargosa",
+    "data": "17/09/2026",
+    "horario_saida": 1540,
+    "horario_chegada": 0,
+    "assentos_totais": 4,
+    "assentos_ocupados": 1,
+    "valor": 30
+  }
+}
