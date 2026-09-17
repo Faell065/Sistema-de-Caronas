@@ -1,54 +1,15 @@
 {
-  "t_1789613281685763900_0": {
-    "id": "t_1789613281685763900_0",
-    "rota_id": "rota_1789613281685763900",
-    "motorista_id": "rafa_9639",
-    "origem": "feira de santana",
-    "destino": "salvador",
-    "data": "17/09/2026",
-    "horario_saida": 1330,
-    "horario_chegada": 1430,
-    "assentos_totais": 5,
-    "assentos_ocupados": 0,
-    "valor": 20
-  },
-  "t_1789613281685763900_1": {
-    "id": "t_1789613281685763900_1",
-    "rota_id": "rota_1789613281685763900",
-    "motorista_id": "rafa_9639",
-    "origem": "salvador",
-    "destino": "ilheus",
-    "data": "17/09/2026",
-    "horario_saida": 1430,
-    "horario_chegada": 1540,
-    "assentos_totais": 5,
-    "assentos_ocupados": 1,
-    "valor": 35.4
-  },
-  "t_1789613281685763900_2": {
-    "id": "t_1789613281685763900_2",
-    "rota_id": "rota_1789613281685763900",
-    "motorista_id": "rafa_9639",
-    "origem": "ilheus",
-    "destino": "amargosa",
-    "data": "17/09/2026",
-    "horario_saida": 1540,
+  "t_1789661123092320782_0": {
+    "id": "t_1789661123092320782_0",
+    "rota_id": "rota_1789661123092318358",
+    "motorista_id": "motorista_estresse_7689",
+    "origem": "Feira Teste",
+    "destino": "Salvador Teste",
+    "data": "17/09/2027",
+    "horario_saida": 800,
     "horario_chegada": 0,
-    "assentos_totais": 4,
-    "assentos_ocupados": 1,
-    "valor": 30
-  },
-  "t_1789616108732013733_0": {
-    "id": "t_1789616108732013733_0",
-    "rota_id": "rota_1789616108732008383",
-    "motorista_id": "rafa_9639",
-    "origem": "sp",
-    "destino": "campinas",
-    "data": "18/09/2026",
-    "horario_saida": 1630,
-    "horario_chegada": 0,
-    "assentos_totais": 4,
-    "assentos_ocupados": 0,
-    "valor": 65
+    "assentos_totais": 2,
+    "assentos_ocupados": 2,
+    "valor": 25
   }
 }
