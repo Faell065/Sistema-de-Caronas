@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 	"projeto_redes/protocolo"
 	"projeto_redes/dominio"
 )
@@ -16,8 +18,9 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
+		fmt.Println("\n========================================")
 		fmt.Println("      VAIJUNTO - MENU PRINCIPAL         ")
-		fmt.Println("")
+		fmt.Println("========================================")
 		fmt.Println("1 - Motorista")
 		fmt.Println("2 - Passageiro")
 		fmt.Println("0 - Sair")
@@ -33,16 +36,15 @@ func main() {
 
 		switch opcaoStr {
 		case "1":
-			menuMotorista(reader)
+			fluxoAutenticacao(reader, "motorista")
 		case "2":
-			menuPassageiro(reader)
+			fluxoAutenticacao(reader, "passageiro")
 		default:
 			fmt.Println("Opção inválida! Tente novamente.")
 		}
 	}
 }
 
-// fluxoAutenticacao lida com a escolha entre Login ou Cadastro para o tipo de usuário selecionado
 func fluxoAutenticacao(reader *bufio.Reader, tipoUsuario string) {
 	for {
 		fmt.Printf("\n--- MENU %s ---\n", strings.ToUpper(tipoUsuario))
@@ -60,12 +62,12 @@ func fluxoAutenticacao(reader *bufio.Reader, tipoUsuario string) {
 
 		switch op {
 		case "1":
-			if realizarLogin(reader, tipoUsuario) {
-				// Se logou com sucesso, entra no menu específico daquele papel
+			sucesso, idLogado := realizarLoginComRetorno(reader, tipoUsuario)
+			if sucesso {
 				if tipoUsuario == "motorista" {
-					menuMotorista(reader)
+					menuMotorista(reader, idLogado)
 				} else {
-					menuPassageiro(reader)
+					menuPassageiro(reader, idLogado)
 				}
 			}
 		case "2":
@@ -76,7 +78,6 @@ func fluxoAutenticacao(reader *bufio.Reader, tipoUsuario string) {
 	}
 }
 
-// realizarCadastro envia os dados para o servidor criar a conta e gerar o ID único
 func realizarCadastro(reader *bufio.Reader, tipoUsuario string) {
 	fmt.Print("Insira seu Nome Completo: ")
 	nome, _ := reader.ReadString('\n')
@@ -106,9 +107,8 @@ func realizarCadastro(reader *bufio.Reader, tipoUsuario string) {
 	}
 }
 
-// realizarLogin valida o ID e senha informados no servidor
-func realizarLogin(reader *bufio.Reader, tipoUsuario string) bool {
-	fmt.Print("Insira seu ID de Usuário (ex: joao_1234): ")
+func realizarLoginComRetorno(reader *bufio.Reader, tipoUsuario string) (bool, string) {
+	fmt.Print("Insira seu ID de Usuário: ")
 	idUsuario, _ := reader.ReadString('\n')
 	idUsuario = strings.TrimSpace(idUsuario)
 
@@ -126,41 +126,38 @@ func realizarLogin(reader *bufio.Reader, tipoUsuario string) bool {
 	resp, err := enviarRequisicao(req)
 	if err != nil {
 		fmt.Println("Erro de comunicação com o servidor:", err)
-		return false
+		return false, ""
 	}
 
 	fmt.Printf("\n[RESPOSTA] %s\n", resp.Mensagem)
-	return resp.Sucesso
+	if resp.Sucesso {
+		return true, idUsuario
+	}
+	return false, ""
 }
 
-// enviarRequisicao encapsula a abertura do socket TCP, envio e leitura da resposta
 func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
-	// Conecta ao servidor TCP rodando na máquina local na porta 8080
 	conn, err := net.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
 		return protocolo.Resposta{}, fmt.Errorf("não foi possível conectar ao servidor: %v", err)
 	}
 	defer conn.Close()
 
-	// Serializa a struct Requisicao para formato JSON
 	bytesReq, err := json.Marshal(req)
 	if err != nil {
 		return protocolo.Resposta{}, err
 	}
 
-	// Envia os bytes para o servidor via socket, adicionando '\n' como delimitador de fim de mensagem
 	_, err = conn.Write(append(bytesReq, '\n'))
 	if err != nil {
 		return protocolo.Resposta{}, err
 	}
 
-	// Lê a resposta enviada de volta pelo servidor
 	respostaBytes, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
 		return protocolo.Resposta{}, err
 	}
 
-	// Desserializa os bytes recebidos para a struct Resposta do protocolo
 	var resp protocolo.Resposta
 	err = json.Unmarshal(respostaBytes, &resp)
 	if err != nil {
@@ -170,11 +167,12 @@ func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
 	return resp, nil
 }
 
-// menuMotorista gerencia as interações específicas para o motorista
-func menuMotorista(reader *bufio.Reader) {
+func menuMotorista(reader *bufio.Reader, idMotorista string) {
 	for {
-		fmt.Println("\n--- MOTORISTA (LOGADO) ---")
-		fmt.Println("1 - Adicionar Rota Completa (Origem, Destino, Paradas e Preços)")
+		fmt.Printf("\n--- MOTORISTA LOGADO (%s) ---\n", idMotorista)
+		fmt.Println("1 - Adicionar Rota Completa")
+		fmt.Println("2 - Minhas Rotas Publicadas")
+		fmt.Println("3 - Cancelar Rota Publicada")
 		fmt.Println("0 - Deslogar")
 		fmt.Print("Escolha: ")
 
@@ -184,45 +182,41 @@ func menuMotorista(reader *bufio.Reader) {
 		if op == "0" {
 			break
 		}
-
-		if op == "1" {
-			fmt.Print("Seu ID de Motorista: ")
-			idMotorista, _ := reader.ReadString('\n')
-			idMotorista = strings.TrimSpace(idMotorista)
-
-			fmt.Print("Data da Viagem (ex: 2026-06-15): ")
-			dataViagem, _ := reader.ReadString('\n')
-			dataViagem = strings.TrimSpace(dataViagem)
+		switch op{
+		case "1" :
+			dataViagem := lerDataValida(reader, "Data da Viagem (DD/MM/AAAA): ")
 
 			fmt.Println("\n--- Configuração de Paradas ---")
-			fmt.Println("Você precisa informar pelo menos 2 paradas (Ex: Origem e Destino).")
-			
 			var paradas []protocolo.ParadaRequisicao
 			
-			for i := 1; ; i++ {
+			horarioAnterior := -1
+			i := 1
+			for {
 				fmt.Printf("\nParada %d:\n", i)
-				fmt.Print("  Nome da Cidade (ou digite 'fim' para encerrar): ")
-				cidade, _ := reader.ReadString('\n')
-				cidade = strings.TrimSpace(cidade)
+				cidade := lerTextoValido(reader, "  Nome da Cidade: ")
 
-				if strings.ToLower(cidade) == "fim" {
-					break
+				isUltima := false
+				if len(paradas) >= 1 {
+					fmt.Print("Deseja adicionar outra parada intermediária após esta? (s/n): ")
+					respInterm, _ := reader.ReadString('\n')
+					respInterm = strings.TrimSpace(respInterm)
+					if strings.ToLower(respInterm) != "s" {
+						isUltima = true
+					}
 				}
 
-				fmt.Print("  Horário de Saída desta cidade (ex: 800): ")
-				var horarioSaida int
-				fmt.Scanln(&horarioSaida)
+				horarioSaida := 0
+				assentos := 0
+				valor := 0.0
 
-				var assentos int
-				var valor float64
+				// Se NÃO for o destino final, solicita dados do trecho de saída
+				if !isUltima {
+					horarioSaida = lerHorarioValido(reader, "  Horário de Saída (ex: 08:00 ou 800): ", horarioAnterior)
+					horarioAnterior = horarioSaida
 
-				// Se não for a última parada, ela tem um trecho que sai dela para a próxima
-				fmt.Print("  Assentos disponíveis para o trecho que SAI desta cidade: ")
-				fmt.Scanln(&assentos)
-
-				fmt.Print("  Valor em R$ para o trecho que SAI desta cidade: ")
-				fmt.Scanln(&valor)
-				reader.ReadString('\n') // Limpa o buffer
+					assentos = lerIntValido(reader, "  Assentos disponíveis para o trecho que SAI desta cidade: ")
+					valor = lerFloatValido(reader, "  Valor em R$ para o trecho que SAI desta cidade: ")
+				}
 
 				paradas = append(paradas, protocolo.ParadaRequisicao{
 					Cidade:         cidade,
@@ -231,19 +225,14 @@ func menuMotorista(reader *bufio.Reader) {
 					Valor:          valor,
 				})
 
-				// Se já tivermos 2 ou mais, perguntamos se deseja adicionar mais paradas intermediárias
-				if len(paradas) >= 2 {
-					fmt.Print("Deseja adicionar outra parada intermediária? (s/n): ")
-					respContinuar, _ := reader.ReadString('\n')
-					respContinuar = strings.TrimSpace(respContinuar)
-					if strings.ToLower(respContinuar) != "s" {
-						break
-					}
+				if isUltima {
+					break
 				}
+				i++
 			}
 
 			if len(paradas) < 2 {
-				fmt.Println("Erro: Uma rota precisa ter pelo menos 2 paradas (Origem e Destino). Operação cancelada.")
+				fmt.Println("Erro: Uma rota precisa ter pelo menos origem e destino.")
 				continue
 			}
 
@@ -261,15 +250,54 @@ func menuMotorista(reader *bufio.Reader) {
 				continue
 			}
 			fmt.Printf("\n[RESPOSTA] %s\n", resp.Mensagem)
+
+		case "2" :
+			req := protocolo.Requisicao{TipoAcao: "LISTAR_ROTAS_MOTORISTA", IDUsuario: idMotorista}
+			resp, err := enviarRequisicao(req)
+			if err != nil {
+				fmt.Println("Erro de comunicação:", err)
+				continue
+			}
+
+			var rotas map[string][]dominio.Trecho
+			json.Unmarshal([]byte(resp.DadosJSON), &rotas)
+
+			if len(rotas) == 0 {
+				fmt.Println("\nNenhuma rota cadastrada no momento.")
+				continue
+			}
+
+			fmt.Println("\n--- SUAS ROTAS PUBLICADAS ---")
+			for rotaID, trechos := range rotas {
+				fmt.Printf("\n[ROTA ID: %s] (%d trecho(s))\n", rotaID, len(trechos))
+				for _, t := range trechos {
+					fmt.Printf("   * %s -> %s | Saída: %s | Assentos: %d/%d ocupados | R$ %.2f\n",
+						t.Origem, t.Destino, formatarHorario(t.HorarioSaida), t.AssentosOcupados, t.AssentosTotais, t.Valor)
+				}
+			}
+
+		case "3":
+			fmt.Print("\nDigite o ID da Rota que deseja cancelar: ")
+			idRota, _ := reader.ReadString('\n')
+			idRota = strings.TrimSpace(idRota)
+
+			req := protocolo.Requisicao{TipoAcao: "CANCELAR_ROTA", IDUsuario: idMotorista, IDRota: idRota}
+			resp, err := enviarRequisicao(req)
+			if err != nil {
+				fmt.Println("Erro de comunicação:", err)
+				continue
+			}
+			fmt.Printf("\n[RESPOSTA] %s\n", resp.Mensagem)
 		}
 	}
 }
 
-// menuPassageiro gerencia as interações específicas para o passageiro
-func menuPassageiro(reader *bufio.Reader) {
+func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 	for {
-		fmt.Println("\n--- PASSAGEIRO (LOGADO) ---")
+		fmt.Printf("\n--- PASSAGEIRO LOGADO (%s) ---\n", idPassageiro)
 		fmt.Println("1 - Buscar e Reservar Itinerário")
+		fmt.Println("2 - Minhas Reservas")
+		fmt.Println("3 - Cancelar Reserva")
 		fmt.Println("0 - Deslogar")
 		fmt.Print("Escolha: ")
 
@@ -280,22 +308,16 @@ func menuPassageiro(reader *bufio.Reader) {
 			break
 		}
 
-		if op == "1" {
-			fmt.Print("Origem desejada: ")
-			origem, _ := reader.ReadString('\n')
-			origem = strings.TrimSpace(origem)
-
-			fmt.Print("Destino desejado: ")
-			destino, _ := reader.ReadString('\n')
-			destino = strings.TrimSpace(destino)
-
-			fmt.Print("Data da Viagem (ex: 2026-06-15): ")
-			data, _ := reader.ReadString('\n')
-			data = strings.TrimSpace(data)
+		switch op{
+			case "1":
+			origem := lerTextoValido(reader, "Origem desejada: ")
+			destino := lerTextoValido(reader, "Destino desejado: ")
+			data := lerDataValida(reader, "Data da Viagem (DD/MM/AAAA): ")
 
 			req := protocolo.Requisicao{
 				TipoAcao:    "BUSCAR_ITINERARIO",
 				TipoUsuario: "passageiro",
+				IDUsuario:   idPassageiro,
 				Origem:      origem,
 				Destino:     destino,
 				Data:        data,
@@ -319,15 +341,14 @@ func menuPassageiro(reader *bufio.Reader) {
 			for i, itin := range itinerarios {
 				fmt.Printf("[%d] Valor Total: R$ %.2f | Vagas Disponíveis: %d\n", i+1, itin.ValorTotal, itin.AssentosDisponivel)
 				for _, t := range itin.Trechos {
-					fmt.Printf("    -> Trecho: %s para %s | Saída: %d | R$ %.2f (Motorista: %s)\n", 
-						t.Origem, t.Destino, t.HorarioSaida, t.Valor, t.MotoristaID)
+					fmt.Printf("    -> Trecho: %s para %s | Saída: %s | R$ %.2f (Motorista: %s)\n", 
+						t.Origem, t.Destino, formatarHorario(t.HorarioSaida), t.Valor, t.MotoristaID)
 				}
 			}
 
 			fmt.Print("\nDigite o número do itinerário que deseja reservar (ou 0 para cancelar): ")
-			var escolha int
-			fmt.Scanln(&escolha)
-			reader.ReadString('\n') // Limpa buffer
+			escolhaStr, _ := reader.ReadString('\n')
+			escolha, _ := strconv.Atoi(strings.TrimSpace(escolhaStr))
 
 			if escolha <= 0 || escolha > len(itinerarios) {
 				fmt.Println("Operação cancelada.")
@@ -336,7 +357,6 @@ func menuPassageiro(reader *bufio.Reader) {
 
 			itinerarioEscolhido := itinerarios[escolha-1]
 
-			// Coleta os IDs de todos os trechos que compõem o itinerário escolhido
 			var idsTrechos []string
 			for _, t := range itinerarioEscolhido.Trechos {
 				idsTrechos = append(idsTrechos, t.ID)
@@ -344,6 +364,7 @@ func menuPassageiro(reader *bufio.Reader) {
 
 			reqReserva := protocolo.Requisicao{
 				TipoAcao:   "RESERVAR_ITINERARIO",
+				IDUsuario:  idPassageiro,
 				IDsTrechos: idsTrechos,
 			}
 
@@ -354,6 +375,161 @@ func menuPassageiro(reader *bufio.Reader) {
 			}
 
 			fmt.Printf("\n[STATUS DA RESERVA] %s\n", respReserva.Mensagem)
+
+		case "2":
+			req := protocolo.Requisicao{TipoAcao: "LISTAR_RESERVAS_PASSAGEIRO", IDUsuario: idPassageiro}
+			resp, err := enviarRequisicao(req)
+			if err != nil {
+				fmt.Println("Erro de comunicação:", err)
+				continue
+			}
+
+			var reservas []map[string]interface{}
+			json.Unmarshal([]byte(resp.DadosJSON), &reservas)
+
+			if len(reservas) == 0 {
+				fmt.Println("\nVocê não possui reservas ativas.")
+				continue
+			}
+
+			fmt.Println("\n--- SUAS RESERVAS ATIVAS ---")
+			for _, r := range reservas {
+				fmt.Printf("\n[RESERVA ID: %v] - Valor Total: R$ %.2f\n", r["id_reserva"], r["valor_total"])
+				
+				// Desserializa os trechos da reserva
+				bytesTrechos, _ := json.Marshal(r["trechos"])
+				var trechos []dominio.Trecho
+				json.Unmarshal(bytesTrechos, &trechos)
+
+				for _, t := range trechos {
+					fmt.Printf("   * Trecho: %s para %s | Saída: %s | Motorista: %s\n",
+						t.Origem, t.Destino, formatarHorario(t.HorarioSaida), t.MotoristaID)
+				}
+			}
+
+		case "3":
+			fmt.Print("\nDigite o ID da Reserva que deseja cancelar: ")
+			idReserva, _ := reader.ReadString('\n')
+			idReserva = strings.TrimSpace(idReserva)
+
+			req := protocolo.Requisicao{TipoAcao: "CANCELAR_RESERVA", IDUsuario: idPassageiro, IDReserva: idReserva}
+			resp, err := enviarRequisicao(req)
+			if err != nil {
+				fmt.Println("Erro de comunicação:", err)
+				continue
+			}
+			fmt.Printf("\n[STATUS DO CANCELAMENTO] %s\n", resp.Mensagem)	
 		}
 	}
+}
+
+// ============================================================================
+// FUNÇÕES AUXILIARES DE VALIDAÇÃO E ENTRADA RECURSIVA/LOOP
+// ============================================================================
+
+func lerTextoValido(reader *bufio.Reader, mensagem string) string {
+	for {
+		fmt.Print(mensagem)
+		texto, _ := reader.ReadString('\n')
+		texto = strings.TrimSpace(texto)
+		if texto != "" {
+			return texto
+		}
+		fmt.Println(" Erro: O campo não pode ficar em branco. Tente novamente.")
+	}
+}
+
+func lerDataValida(reader *bufio.Reader, mensagem string) string {
+	for {
+		fmt.Print(mensagem)
+		entrada, _ := reader.ReadString('\n')
+		entrada = strings.TrimSpace(entrada)
+
+		t, err := time.Parse("02/01/2006", entrada)
+		if err != nil {
+			fmt.Println(" Erro: Data inválida! Use o formato DD/MM/AAAA (ex: 25/12/2026).")
+			continue
+		}
+
+		// Zera o horário para comparar apenas o dia
+		hoje := time.Now()
+		hojeApenasDia := time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, hoje.Location())
+
+		if t.Before(hojeApenasDia) {
+			fmt.Println(" Erro: A data não pode ser inferior ao dia de hoje.")
+			continue
+		}
+
+		return entrada
+	}
+}
+
+func lerHorarioValido(reader *bufio.Reader, mensagem string, horarioMinimo int) int {
+	for {
+		fmt.Print(mensagem)
+		entrada, _ := reader.ReadString('\n')
+		entrada = strings.TrimSpace(entrada)
+		entradaClean := strings.ReplaceAll(entrada, ":", "")
+
+		val, err := strconv.Atoi(entradaClean)
+		if err != nil {
+			fmt.Println(" Erro: Horário inválido! Digite apenas números (ex: 800 ou 08:00).")
+			continue
+		}
+
+		hora := val / 100
+		minuto := val % 100
+
+		if hora < 0 || hora > 23 || minuto < 0 || minuto > 59 {
+			fmt.Println(" Erro: Horário inexistente! A hora deve ser entre 00 e 23 e os minutos entre 00 e 59.")
+			continue
+		}
+
+		if horarioMinimo >= 0 && val <= horarioMinimo {
+			fmt.Printf(" Erro: O horário de saída (%s) precisa ser posterior ao horário do trecho anterior (%s).\n", 
+				formatarHorario(val), formatarHorario(horarioMinimo))
+			continue
+		}
+
+		return val
+	}
+}
+
+func lerIntValido(reader *bufio.Reader, mensagem string) int {
+	for {
+		fmt.Print(mensagem)
+		entrada, _ := reader.ReadString('\n')
+		entrada = strings.TrimSpace(entrada)
+
+		val, err := strconv.Atoi(entrada)
+		if err != nil || val <= 0 {
+			fmt.Println(" Erro: Digite um número inteiro maior que zero.")
+			continue
+		}
+
+		return val
+	}
+}
+
+func lerFloatValido(reader *bufio.Reader, mensagem string) float64 {
+	for {
+		fmt.Print(mensagem)
+		entrada, _ := reader.ReadString('\n')
+		entrada = strings.TrimSpace(entrada)
+		entrada = strings.ReplaceAll(entrada, ",", ".")
+
+		val, err := strconv.ParseFloat(entrada, 64)
+		if err != nil || val < 0 {
+			fmt.Println(" Erro: Digite um valor numérico válido (ex: 15.50).")
+			continue
+		}
+
+		return val
+	}
+}
+
+func formatarHorario(h int) string {
+	hora := h / 100
+	minuto := h % 100
+	return fmt.Sprintf("%02d:%02d", hora, minuto)
 }

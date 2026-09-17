@@ -42,4 +42,9 @@ type Usuario struct {
 	Tipo  string // "motorista" ou "passageiro"
 }
 
-
+type Reserva struct {
+	ID        string    `json:"id"`
+	PassageiroID string `json:"passageiro_id"`
+	IDsTrechos []string `json:"ids_trechos"`
+	Data      string    `json:"data"`
+}

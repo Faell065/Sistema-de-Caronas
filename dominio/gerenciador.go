@@ -35,13 +35,16 @@ type GerenciadorDeRotas struct {
 	mu sync.RWMutex // minha variavel de controle de concorrencia, usada para acesso seguro dados compartilhados entre goroutines, um mutex de leitura e escrita, para que eu possa ler e escrever de forma segura 
 	Trechos map[string] *Trecho
 	Usuarios map[string]*Usuario // Novo mapa para gerenciar usuários em memória
+	Reservas map[string]*Reserva // Novo mapa para gerenciar reservas em memória
 }
 
 // função para eu criar a instancia do GerenciadorDeRotas, que é um mapa de trechos, onde a chave é uma string (ID do trecho) e o valor é um ponteiro para o trecho correspondente.
 func NovoGerenciador() *GerenciadorDeRotas {
 	return &GerenciadorDeRotas{ 
 		Trechos: make(map[string]*Trecho),
-		Usuarios: make(map[string]*Usuario)}
+		Usuarios: make(map[string]*Usuario),
+		Reservas: make(map[string]*Reserva)}
+		
 }
 
 // METODOS GERENCIADOR DE ROTAS 
@@ -76,8 +79,8 @@ func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string,
 }
 // USUARIO
 
-// Autenticar valida se o ID e a senha conferem
-func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha string) (bool, *Usuario) {
+// Autenticar valida se o ID, a senha e o TIPO conferem
+func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha, tipo string) (bool, *Usuario) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -86,7 +89,8 @@ func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha string) (bool, *Usuario
 		return false, nil
 	}
 
-	if usuario.Senha != senha {
+	// Bloqueia se a senha estiver errada ou se o tipo de usuário for diferente do menu acessado
+	if usuario.Senha != senha || usuario.Tipo != tipo {
 		return false, nil
 	}
 
@@ -192,7 +196,7 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 }
 
 
-
+//SUBSTITUIDO POR RESERVARCOMID
 // ReservarItinerario tenta reservar assentos em todos os trechos de um itinerário de forma atômica
 func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, string) {
 	g.mu.Lock()
@@ -220,15 +224,6 @@ func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, stri
 // ITNERARIO
 // ITNERARIO
 // ITNERARIO
-
-
-
-
-
-
-
-
-
 
 
 
@@ -279,4 +274,123 @@ func (g *GerenciadorDeRotas) CadastrarRotaCompleta(
 	}
 
 	return idsTrechosGerados
+}
+
+
+
+// --- MÉTODOS DO MOTORISTA ---
+
+// ListarRotasMotorista retorna todas as rotas ativas agrupadas criadas por um motorista
+func (g *GerenciadorDeRotas) ListarRotasMotorista(motoristaID string) map[string][]Trecho {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	rotas := make(map[string][]Trecho)
+	for _, t := range g.Trechos {
+		if t.MotoristaID == motoristaID {
+			rotas[t.RotaID] = append(rotas[t.RotaID], *t)
+		}
+	}
+	return rotas
+}
+
+// CancelarRotaMotorista remove todos os trechos associados a uma rota
+func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (bool, string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	encontrou := false
+	for id, t := range g.Trechos {
+		if t.RotaID == rotaID && t.MotoristaID == motoristaID {
+			delete(g.Trechos, id)
+			encontrou = true
+		}
+	}
+
+	if !encontrou {
+		return false, "Rota não encontrada ou não pertence a este motorista."
+	}
+	return true, "Rota cancelada e removida com sucesso!"
+}
+
+// --- MÉTODOS DO PASSAGEIRO ---
+
+// ReservarItinerario atômico com registro de ID da Reserva
+func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTrechos []string) (bool, string, string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for _, idTrecho := range idsTrechos {
+		trecho, existe := g.Trechos[idTrecho]
+		if !existe {
+			return false, fmt.Sprintf("Trecho %s não existe mais.", idTrecho), ""
+		}
+		if trecho.AssentosOcupados >= trecho.AssentosTotais {
+			return false, fmt.Sprintf("O trecho de %s para %s esgotou as vagas!", trecho.Origem, trecho.Destino), ""
+		}
+	}
+
+	for _, idTrecho := range idsTrechos {
+		g.Trechos[idTrecho].AssentosOcupados++
+	}
+
+	reservaID := fmt.Sprintf("res_%d", time.Now().UnixNano())
+	g.Reservas[reservaID] = &Reserva{
+		ID:           reservaID,
+		PassageiroID: passageiroID,
+		IDsTrechos:   idsTrechos,
+		Data:         time.Now().Format("02/01/2006"),
+	}
+
+	return true, "Itinerário reservado com sucesso!", reservaID
+}
+
+// ListarReservasPassageiro busca todas as reservas ativas do passageiro
+func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map[string]interface{} {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	var lista []map[string]interface{}
+	for _, res := range g.Reservas {
+		if res.PassageiroID == passageiroID {
+			var trechosReserva []Trecho
+			var valorTotal float64
+			for _, idT := range res.IDsTrechos {
+				if t, ok := g.Trechos[idT]; ok {
+					trechosReserva = append(trechosReserva, *t)
+					valorTotal += t.Valor
+				}
+			}
+
+			lista = append(lista, map[string]interface{}{
+				"id_reserva":  res.ID,
+				"trechos":     trechosReserva,
+				"valor_total": valorTotal,
+			})
+		}
+	}
+	return lista
+}
+
+// CancelarReservaPassageiro libera os assentos de volta no sistema e deleta a reserva
+func (g *GerenciadorDeRotas) CancelarReservaPassageiro(passageiroID, reservaID string) (bool, string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	res, existe := g.Reservas[reservaID]
+	if !existe || res.PassageiroID != passageiroID {
+		return false, "Reserva não encontrada ou não pertence a este passageiro."
+	}
+
+	// Devolve os assentos ocupados nos trechos correspondentes
+	for _, idTrecho := range res.IDsTrechos {
+		if trecho, ok := g.Trechos[idTrecho]; ok {
+			if trecho.AssentosOcupados > 0 {
+				trecho.AssentosOcupados--
+			}
+		}
+	}
+
+	delete(g.Reservas, reservaID)
+	return true, "Reserva cancelada com sucesso! As vagas foram liberadas no sistema."
 }

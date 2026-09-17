@@ -18,6 +18,8 @@ type Requisicao struct {
 	HorarioChegada   int      `json:"horario_chegada,omitempty"`   // Add para o cadastro
 	AssentosTotais   int      `json:"assentos_totais,omitempty"`   // Add para o cadastro
 	IDsTrechos   []string `json:"ids_trechos,omitempty"`// Usado na reserva
+	IDRota       string             `json:"id_rota,omitempty"`      // Para cancelamento de rota do motorista
+	IDReserva    string             `json:"id_reserva,omitempty"`   // Para cancelamento de reserva do passageiro
 }
 // observação: os campos com `omitempty` são opcionais e só aparecem no JSON se tiverem valor
 // Resposta representa o envelope padrão que o servidor devolve para o cliente

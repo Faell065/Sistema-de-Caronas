@@ -83,10 +83,10 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "LOGIN":
-		// Valida as credenciais no gerenciador
-		valido, usuario := s.Gerenciador.Autenticar(req.IDUsuario, req.Senha)
+		// Valida as credenciais e o tipo de conta no gerenciador
+		valido, usuario := s.Gerenciador.Autenticar(req.IDUsuario, req.Senha, req.TipoUsuario)
 		if !valido {
-			resp = protocolo.Resposta{Sucesso: false, Mensagem: "ID ou senha incorretos."}
+			resp = protocolo.Resposta{Sucesso: false, Mensagem: "ID, senha incorretos ou tipo de conta incompatível."}
 		} else {
 			resp = protocolo.Resposta{
 				Sucesso:  true,
@@ -105,15 +105,47 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 			DadosJSON: string(dadosBytes),
 		}
 
-	case "RESERVAR_ITINERARIO":
-		sucesso, msg := s.Gerenciador.ReservarItinerario(req.IDsTrechos)
+	case "LISTAR_ROTAS_MOTORISTA":
+		rotas := s.Gerenciador.ListarRotasMotorista(req.IDUsuario)
+		bytesData, _ := json.Marshal(rotas)
 		resp = protocolo.Resposta{
-			Sucesso:  sucesso,
-			Mensagem: msg,
+			Sucesso:   true,
+			Mensagem:  fmt.Sprintf("Encontradas %d rotas.", len(rotas)),
+			DadosJSON: string(bytesData),
 		}
 
+	case "CANCELAR_ROTA":
+		sucesso, msg := s.Gerenciador.CancelarRotaMotorista(req.IDUsuario, req.IDRota)
+		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
+
+	case "RESERVAR_ITINERARIO":
+		sucesso, msg, resID := s.Gerenciador.ReservarItinerarioComID(req.IDUsuario, req.IDsTrechos)
+		resp = protocolo.Resposta{
+			Sucesso:   sucesso,
+			Mensagem:  fmt.Sprintf("%s (ID da Reserva: %s)", msg, resID),
+			DadosJSON: resID,
+		}
+
+	case "LISTAR_RESERVAS_PASSAGEIRO":
+		reservas := s.Gerenciador.ListarReservasPassageiro(req.IDUsuario)
+		bytesData, _ := json.Marshal(reservas)
+		resp = protocolo.Resposta{
+			Sucesso:   true,
+			Mensagem:  fmt.Sprintf("Encontradas %d reservas.", len(reservas)),
+			DadosJSON: string(bytesData),
+		}
+
+	case "CANCELAR_RESERVA":
+		sucesso, msg := s.Gerenciador.CancelarReservaPassageiro(req.IDUsuario, req.IDReserva)
+		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
+
 	case "CADASTRAR_ROTA":
-		// Converte as paradas do protocolo para o formato do domínio
+		// Valida se o ID do motorista foi enviado e existe
+		if req.IDUsuario == "" {
+			resp = protocolo.Resposta{Sucesso: false, Mensagem: "Usuário não autenticado."}
+			break
+		}
+
 		var paradasDominio []dominio.ParadaRota
 		for _, p := range req.Paradas {
 			paradasDominio = append(paradasDominio, dominio.ParadaRota{
@@ -124,7 +156,6 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 			})
 		}
 
-		// Cadastra a rota completa e gera os trechos fragmentados com assentos e preços independentes
 		idsGerados := s.Gerenciador.CadastrarRotaCompleta(req.IDUsuario, req.Data, paradasDominio)
 
 		if len(idsGerados) == 0 {
