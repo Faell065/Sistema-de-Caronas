@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  servidor_caronas:
+    build:
+      context: .
+      dockerfile: Dockerfile.servidor
+    container_name: servidor_caronas_container
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mapeia os arquivos JSON para a máquina hospedeira para não perder dados ao desligar o Docker
+      - ./dados_persistentados:/app
+    restart: always

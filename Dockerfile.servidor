@@ -1,0 +1,28 @@
+# Estágio 1: Build da Aplicação em Go
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Copia os arquivos de código
+COPY go.mod ./
+COPY dominio/ ./dominio/
+COPY protocolo/ ./protocolo/
+COPY servidor/ ./servidor/
+COPY cmd/servidor/ ./cmd/servidor/
+
+# Compila o binário estático
+RUN CGO_ENABLED=0 GOOS=linux go build -o servidor_exe ./cmd/servidor/main.go
+
+# Estágio 2: Imagem final leve (Scratch/Alpine)
+FROM alpine:latest
+
+WORKDIR /app
+
+# Copia o binário compilado do estágio anterior
+COPY --from=builder /app/servidor_exe .
+
+# Expõe a porta 8080
+EXPOSE 8080
+
+# Executa o servidor
+CMD ["./servidor_exe"]

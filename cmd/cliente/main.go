@@ -14,8 +14,30 @@ import (
 	"projeto_redes/dominio"
 )
 
+// Variável global para armazenar o IP e porta do servidor
+var enderecoServidor = "127.0.0.1:8080"
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
+
+	// Permite passar o IP do servidor direto pelo terminal: go run main.go 192.168.1.15:8080
+	if len(os.Args) > 1 {
+		enderecoServidor = os.Args[1]
+	} else {
+		// Se não passar nada na execução, pergunta ao abrir o programa
+		fmt.Print("Digite o IP do Servidor (Pressione ENTER para '127.0.0.1:8080'): ")
+		ipInput, _ := reader.ReadString('\n')
+		ipInput = strings.TrimSpace(ipInput)
+		if ipInput != "" {
+			if !strings.Contains(ipInput, ":") {
+				enderecoServidor = ipInput + ":8080"
+			} else {
+				enderecoServidor = ipInput
+			}
+		}
+	}
+
+	fmt.Printf("[CONECTANDO] Servidor configurado para: %s\n", enderecoServidor)
 
 	for {
 		fmt.Println("\n========================================")
@@ -137,7 +159,7 @@ func realizarLoginComRetorno(reader *bufio.Reader, tipoUsuario string) (bool, st
 }
 
 func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
-	conn, err := net.Dial("tcp", "127.0.0.1:8080")
+	conn, err := net.Dial("tcp", enderecoServidor)
 	if err != nil {
 		return protocolo.Resposta{}, fmt.Errorf("não foi possível conectar ao servidor: %v", err)
 	}

@@ -24,7 +24,7 @@ func NovoServidor() *Servidor{
 // Função para iniciar o servidor e escutar por conexões
 func (s *Servidor) Iniciar(porta string) {
 	// Inicia o listener TCP na porta especificada
-	listener, err := net.Listen("tcp", ":"+porta)
+	listener, err := net.Listen("tcp", "0.0.0.0:8080") // anteriormente estava "localhost:"+porta, mas para aceitar conexões externas, usamos ":"+porta
 	if err != nil {
 		fmt.Println("Erro ao iniciar o servidor na porta %s: %v\n:",porta, err)
 		return
