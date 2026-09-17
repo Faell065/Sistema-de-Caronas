@@ -17,6 +17,9 @@ run-cliente: ## Executa o cliente Go apontando para o localhost
 run-teste-concorrencia: ## Executa testes automatizados de concorrência e carga
 	go run cmd/teste_carga/main.go $(SERVER_IP)
 
+run-teste-integridade: ## Testa a integridade do sistema em cenarios complexos de requisições
+	go run cmd/teste_integridade/main.go $(SERVER_IP)
+
 ##@ Docker
 
 docker-up: ## Inicializa e recria os containers em segundo plano (background)
