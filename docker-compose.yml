@@ -3,10 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.servidor
+    command: ["/app/servidor_exe", "-config", "config/docker/empresa_a.json"]
     container_name: servidor_caronas_container
     ports:
       - "8080:8080"
+      - "8081:8081"
     volumes:
       # Modificado: Agora aponta para uma subpasta, sem sobrescrever o binário em /app
-      - ./dados_persistentados:/app/dados
+      - ./dados_empresas/empresa_a:/app/dados_empresas/empresa_a
     restart: always

@@ -8,6 +8,7 @@ COPY go.mod ./
 COPY dominio/ ./dominio/
 COPY protocolo/ ./protocolo/
 COPY servidor/ ./servidor/
+COPY configuracao/ ./configuracao/
 COPY cmd/servidor/ ./cmd/servidor/
 
 # Compila o binário estático
@@ -18,11 +19,14 @@ FROM gcr.io/distroless/static-debian12
 
 WORKDIR /app
 
+COPY config/ ./config/
+
 # Copia o binário compilado do estágio anterior
 COPY --from=builder /app/servidor_exe .
 
 # Expõe a porta 8080
 EXPOSE 8080
+EXPOSE 8081
 
 # Executa o servidor (em distroless usamos o caminho direto)
 CMD ["/app/servidor_exe"]

@@ -32,6 +32,7 @@ func CriarRota(id string, motoristaID string, paradas []string, assentos int) Ro
 
 
 type GerenciadorDeRotas struct {
+	diretorioDados string // Armazenamento exclusivo da instância.
 	mu sync.RWMutex // minha variavel de controle de concorrencia, usada para acesso seguro dados compartilhados entre goroutines, um mutex de leitura e escrita, para que eu possa ler e escrever de forma segura 
 	Trechos map[string] *Trecho
 	Usuarios map[string]*Usuario // Novo mapa para gerenciar usuários em memória
@@ -40,7 +41,12 @@ type GerenciadorDeRotas struct {
 
 // função para eu criar a instancia do GerenciadorDeRotas, que é um mapa de trechos, onde a chave é uma string (ID do trecho) e o valor é um ponteiro para o trecho correspondente.
 func NovoGerenciador() *GerenciadorDeRotas {
+	return NovoGerenciadorComDiretorio("dados")
+}
+
+func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
 	g := &GerenciadorDeRotas{
+		diretorioDados: diretorio,
 		Trechos:  make(map[string]*Trecho),
 		Usuarios: make(map[string]*Usuario),
 		Reservas: make(map[string]*Reserva),

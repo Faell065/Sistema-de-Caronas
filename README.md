@@ -1,3 +1,5 @@
+> **PBL 2:** consulte [ETAPA1.md](ETAPA1.md) para a execução atual com empresas independentes. O manual abaixo descreve a versão original do PBL 1.
+
 # Sistema-de-Caronas (VaiJunto)
 O **VaiJunto** é um sistema distribuído projetado para gerenciamento e reserva de caronas com múltiplas paradas. O projeto divide-se estruturalmente em componentes de Cliente (passagerios e motoristas) e Servidor (gerenciador e banco de dados JSON), se comunicando nativamente por meio de Sockets TCP.
 

@@ -1,0 +1,22 @@
+{
+  "empresa": {
+    "id": "empresa_a",
+    "nome": "VaiJunto",
+    "url": "http://127.0.0.1:8081"
+  },
+  "endereco_tcp": "127.0.0.1:8080",
+  "endereco_http": "127.0.0.1:8081",
+  "diretorio_dados": "../dados_empresas/empresa_a",
+  "pares": [
+    {
+      "id": "empresa_b",
+      "nome": "Empresa B",
+      "url": "http://127.0.0.1:8091"
+    },
+    {
+      "id": "empresa_c",
+      "nome": "Empresa C",
+      "url": "http://127.0.0.1:8101"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# Ambiente local de desenvolvimento. No laboratório, usar IPs dos computadores.
+services:
+  empresa_a:
+    build:
+      context: .
+      dockerfile: Dockerfile.servidor
+    command: ["/app/servidor_exe", "-config", "config/docker/empresa_a.json"]
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - ./dados_empresas/empresa_a:/app/dados_empresas/empresa_a
+    restart: unless-stopped
+  empresa_b:
+    build:
+      context: .
+      dockerfile: Dockerfile.servidor
+    command: ["/app/servidor_exe", "-config", "config/docker/empresa_b.json"]
+    ports:
+      - "8090:8080"
+      - "8091:8081"
+    volumes:
+      - ./dados_empresas/empresa_b:/app/dados_empresas/empresa_b
+    restart: unless-stopped
+  empresa_c:
+    build:
+      context: .
+      dockerfile: Dockerfile.servidor
+    command: ["/app/servidor_exe", "-config", "config/docker/empresa_c.json"]
+    ports:
+      - "8100:8080"
+      - "8101:8081"
+    volumes:
+      - ./dados_empresas/empresa_c:/app/dados_empresas/empresa_c
+    restart: unless-stopped

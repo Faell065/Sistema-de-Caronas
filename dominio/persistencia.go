@@ -5,31 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // SalvarDados grava o estado atual das memórias nos arquivos JSON
 func (g *GerenciadorDeRotas) SalvarDados() error {
 	// Garante que a pasta 'dados' existe antes de salvar
-	err := os.MkdirAll("dados", 0755)
+	err := os.MkdirAll(g.diretorioDados, 0755)
 	if err != nil {
 		return err
 	}
 	// Salva Usuários
 	bytesUsuarios, err := json.MarshalIndent(g.Usuarios, "", "  ")
 	if err == nil {
-		os.WriteFile("dados/usuarios.json", bytesUsuarios, 0644)
+		os.WriteFile(filepath.Join(g.diretorioDados, "usuarios.json"), bytesUsuarios, 0644)
 	}
 
 	// Salva Trechos
 	bytesTrechos, err := json.MarshalIndent(g.Trechos, "", "  ")
 	if err == nil {
-		os.WriteFile("dados/trechos.json", bytesTrechos, 0644)
+		os.WriteFile(filepath.Join(g.diretorioDados, "trechos.json"), bytesTrechos, 0644)
 	}
 
 	// Salva Reservas
 	bytesReservas, err := json.MarshalIndent(g.Reservas, "", "  ")
 	if err == nil {
-		os.WriteFile("dados/reservas.json", bytesReservas, 0644)
+		os.WriteFile(filepath.Join(g.diretorioDados, "reservas.json"), bytesReservas, 0644)
 	}
 
 	return nil
@@ -41,17 +42,17 @@ func (g *GerenciadorDeRotas) CarregarDados() {
 	defer g.mu.Unlock()
 
 	// Carrega Usuários
-	if bytesUsuarios, err := os.ReadFile("dados/usuarios.json"); err == nil {
+	if bytesUsuarios, err := os.ReadFile(filepath.Join(g.diretorioDados, "usuarios.json")); err == nil {
 		json.Unmarshal(bytesUsuarios, &g.Usuarios)
 	}
 
 	// Carrega Trechos
-	if bytesTrechos, err := os.ReadFile("dados/trechos.json"); err == nil {
+	if bytesTrechos, err := os.ReadFile(filepath.Join(g.diretorioDados, "trechos.json")); err == nil {
 		json.Unmarshal(bytesTrechos, &g.Trechos)
 	}
 
 	// Carrega Reservas
-	if bytesReservas, err := os.ReadFile("dados/reservas.json"); err == nil {
+	if bytesReservas, err := os.ReadFile(filepath.Join(g.diretorioDados, "reservas.json")); err == nil {
 		json.Unmarshal(bytesReservas, &g.Reservas)
 	}
 
