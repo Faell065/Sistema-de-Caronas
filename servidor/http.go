@@ -48,6 +48,12 @@ type RespostaBuscaRest struct {
 	Itinerarios []ItinerarioRest `json:"itinerarios"`
 }
 
+type DecisaoTransacaoRest struct {
+	ID      string `json:"tx_id"`
+	Motivo  string `json:"motivo,omitempty"`
+	Lamport uint64 `json:"lamport,omitempty"`
+}
+
 func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 	return &Servidor{Gerenciador: dominio.NovoGerenciadorComDiretorio(c.DiretorioDados)}
 }
@@ -156,6 +162,96 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 		escreverJSON(w, http.StatusOK, resposta)
 	})
 
+	mux.HandleFunc("/api/v1/transacoes/", func(w http.ResponseWriter, r *http.Request) {
+		caminho := strings.TrimPrefix(r.URL.Path, "/api/v1/transacoes/")
+		partes := strings.Split(strings.Trim(caminho, "/"), "/")
+		if len(partes) == 0 || partes[0] == "" {
+			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "transação não encontrada"})
+			return
+		}
+		txID := partes[0]
+
+		if len(partes) == 1 && r.Method == http.MethodGet {
+			tx, existe := g.ConsultarTransacaoLocal(txID)
+			if !existe {
+				escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "transação não encontrada"})
+				return
+			}
+			escreverJSON(w, http.StatusOK, tx)
+			return
+		}
+
+		if len(partes) != 2 {
+			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "recurso de transação inválido"})
+			return
+		}
+		acao := partes[1]
+		if r.Method != http.MethodPost {
+			rejeitarMetodo(w, http.MethodPost)
+			return
+		}
+
+		if acao == "prepare" {
+			var tx dominio.TransacaoLocal
+			decodificador := json.NewDecoder(r.Body)
+			decodificador.DisallowUnknownFields()
+			if err := decodificador.Decode(&tx); err != nil {
+				escreverJSON(w, http.StatusBadRequest, RespostaErroRest{Erro: "corpo JSON inválido"})
+				return
+			}
+			if tx.ID == "" {
+				tx.ID = txID
+			}
+			if tx.ID != txID {
+				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: "tx_id da URL difere do corpo"})
+				return
+			}
+			tx.EmpresaID = e.ID
+			resultado, err := g.PrepareReservaLocal(tx)
+			if err != nil {
+				if _, existe := g.ConsultarTransacaoLocal(txID); existe && resultado.Estado == dominio.EstadoTransacaoAbortado {
+					escreverJSON(w, http.StatusConflict, resultado)
+					return
+				}
+				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: err.Error()})
+				return
+			}
+			escreverJSON(w, http.StatusOK, resultado)
+			return
+		}
+
+		var decisao DecisaoTransacaoRest
+		decodificador := json.NewDecoder(r.Body)
+		decodificador.DisallowUnknownFields()
+		if err := decodificador.Decode(&decisao); err != nil {
+			escreverJSON(w, http.StatusBadRequest, RespostaErroRest{Erro: "corpo JSON inválido"})
+			return
+		}
+		if decisao.ID != "" && decisao.ID != txID {
+			escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: "tx_id da URL difere do corpo"})
+			return
+		}
+
+		switch acao {
+		case "commit":
+			resultado, err := g.CommitReservaLocal(txID)
+			if err != nil {
+				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: err.Error()})
+				return
+			}
+			escreverJSON(w, http.StatusOK, resultado)
+		case "abort":
+			resultado, err := g.AbortReservaLocal(txID, decisao.Motivo)
+			if err != nil {
+				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: err.Error()})
+				return
+			}
+			escreverJSON(w, http.StatusOK, resultado)
+		default:
+			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "ação de transação inválida"})
+		}
+	})
+
 	return mux
 }
 
@@ -196,4 +292,8 @@ func (s *Servidor) atenderConexoes(listener net.Listener) error {
 		}
 		go s.atenderCliente(conn)
 	}
+}
+
+func (s *Servidor) HandlerREST(c configuracao.Configuracao) http.Handler {
+	return HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador)
 }

@@ -32,17 +32,19 @@ func CriarRota(id string, motoristaID string, paradas []string, assentos int) Ro
 type GerenciadorDeRotas struct {
 	diretorioDados string
 
-	muUsuarios sync.RWMutex
-	muTrechos  sync.RWMutex
-	muReservas sync.RWMutex
+	muUsuarios   sync.RWMutex
+	muTrechos    sync.RWMutex
+	muReservas   sync.RWMutex
+	muTransacoes sync.RWMutex
 
 	// Operações locais que alteram trechos e reservas juntas usam esta trava.
 	// Ela não deve ser mantida enquanto houver espera de rede em etapas futuras.
 	muOperacoes sync.Mutex
 
-	Trechos  map[string]*Trecho
-	Usuarios map[string]*Usuario
-	Reservas map[string]*Reserva
+	Trechos    map[string]*Trecho
+	Usuarios   map[string]*Usuario
+	Reservas   map[string]*Reserva
+	Transacoes map[string]*TransacaoLocal
 }
 
 func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
@@ -51,6 +53,7 @@ func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
 		Trechos:        make(map[string]*Trecho),
 		Usuarios:       make(map[string]*Usuario),
 		Reservas:       make(map[string]*Reserva),
+		Transacoes:     make(map[string]*TransacaoLocal),
 	}
 	g.CarregarDados()
 	return g

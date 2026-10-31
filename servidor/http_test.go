@@ -98,3 +98,67 @@ func TestContratoRestValidacaoEResposta404(t *testing.T) {
 		t.Fatal("resposta de método não permitido incorreta")
 	}
 }
+
+func TestContratoRestTransacoes(t *testing.T) {
+	e := configuracao.Empresa{ID: "empresa_a", Nome: "Empresa A", URL: "http://localhost:8081"}
+	g := dominio.NovoGerenciadorComDiretorio(t.TempDir())
+	g.AdicionarTrechos([]dominio.Trecho{{ID: "t1", AssentosTotais: 1}})
+	h := HandlerEmpresaComGerenciador(e, g)
+
+	prepare := `{"id":"tx-rest-1","coordenador_id":"empresa_a","operacao":"RESERVAR","idempotency_key":"idem-rest-1","lamport":1,"itens":[{"empresa_id":"empresa_a","trecho_id":"t1","quantidade":1}]}`
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-rest-1/prepare", strings.NewReader(prepare)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("prepare: status %d corpo %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-rest-1/prepare", strings.NewReader(prepare)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("prepare repetido: status %d corpo %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/transacoes/tx-rest-1", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("consulta: status %d corpo %s", w.Code, w.Body.String())
+	}
+
+	for i := 0; i < 2; i++ {
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-rest-1/commit", strings.NewReader(`{"tx_id":"tx-rest-1"}`)))
+		if w.Code != http.StatusOK {
+			t.Fatalf("commit %d: status %d corpo %s", i+1, w.Code, w.Body.String())
+		}
+	}
+
+	trecho, existe := g.ObterTrecho("t1")
+	if !existe || trecho.AssentosOcupados != 1 || trecho.AssentosPreparados != 0 {
+		t.Fatalf("estado REST incorreto: %+v existe=%v", trecho, existe)
+	}
+}
+
+func TestContratoRestTransacaoAbort(t *testing.T) {
+	e := configuracao.Empresa{ID: "empresa_a", Nome: "Empresa A", URL: "http://localhost:8081"}
+	g := dominio.NovoGerenciadorComDiretorio(t.TempDir())
+	g.AdicionarTrechos([]dominio.Trecho{{ID: "t1", AssentosTotais: 1}})
+	h := HandlerEmpresaComGerenciador(e, g)
+
+	prepare := `{"id":"tx-rest-abort","coordenador_id":"empresa_a","operacao":"RESERVAR","lamport":1,"itens":[{"empresa_id":"empresa_a","trecho_id":"t1","quantidade":1}]}`
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-rest-abort/prepare", strings.NewReader(prepare)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("prepare: status %d corpo %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-rest-abort/abort", strings.NewReader(`{"tx_id":"tx-rest-abort","motivo":"outro participante recusou"}`)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("abort: status %d corpo %s", w.Code, w.Body.String())
+	}
+
+	trecho, _ := g.ObterTrecho("t1")
+	if trecho.AssentosPreparados != 0 || trecho.AssentosOcupados != 0 {
+		t.Fatalf("abort REST deixou estado incorreto: %+v", trecho)
+	}
+}

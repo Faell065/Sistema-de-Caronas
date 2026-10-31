@@ -39,6 +39,16 @@ func cloneReservas(src map[string]*Reserva) map[string]*Reserva {
 	return dst
 }
 
+func cloneTransacoes(src map[string]*TransacaoLocal) map[string]*TransacaoLocal {
+	dst := make(map[string]*TransacaoLocal, len(src))
+	for id, transacao := range src {
+		copiado := *transacao
+		copiado.Itens = append([]ItemTransacao(nil), transacao.Itens...)
+		dst[id] = &copiado
+	}
+	return dst
+}
+
 // SalvarDados cria snapshots antes de acessar o disco. Assim persistência não
 // mantém uma trava do gerenciador durante operações de arquivo.
 func (g *GerenciadorDeRotas) SalvarDados() error {
@@ -54,6 +64,10 @@ func (g *GerenciadorDeRotas) SalvarDados() error {
 	reservas := cloneReservas(g.Reservas)
 	g.muReservas.RUnlock()
 
+	g.muTransacoes.RLock()
+	transacoes := cloneTransacoes(g.Transacoes)
+	g.muTransacoes.RUnlock()
+
 	persistenciaMu.Lock()
 	defer persistenciaMu.Unlock()
 
@@ -62,9 +76,10 @@ func (g *GerenciadorDeRotas) SalvarDados() error {
 	}
 
 	for arquivo, dados := range map[string]interface{}{
-		"usuarios.json": usuarios,
-		"trechos.json":  trechos,
-		"reservas.json": reservas,
+		"usuarios.json":   usuarios,
+		"trechos.json":    trechos,
+		"reservas.json":   reservas,
+		"transacoes.json": transacoes,
 	} {
 		bytes, err := json.MarshalIndent(dados, "", "  ")
 		if err != nil {
@@ -105,6 +120,15 @@ func (g *GerenciadorDeRotas) CarregarDados() {
 		g.Reservas = make(map[string]*Reserva)
 	}
 	g.muReservas.Unlock()
+
+	g.muTransacoes.Lock()
+	if dados, err := os.ReadFile(filepath.Join(g.diretorioDados, "transacoes.json")); err == nil {
+		_ = json.Unmarshal(dados, &g.Transacoes)
+	}
+	if g.Transacoes == nil {
+		g.Transacoes = make(map[string]*TransacaoLocal)
+	}
+	g.muTransacoes.Unlock()
 
 	fmt.Println("[SISTEMA] Dados carregados do disco com sucesso!")
 }
