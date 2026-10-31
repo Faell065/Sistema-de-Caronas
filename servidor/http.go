@@ -7,26 +7,155 @@ import (
 	"net/http"
 	"projeto_redes/configuracao"
 	"projeto_redes/dominio"
+	"strings"
 	"time"
 )
+
+type RequisicaoBuscaRest struct {
+	Origem  string `json:"origem"`
+	Destino string `json:"destino"`
+	Data    string `json:"data"`
+}
+
+type RespostaErroRest struct {
+	Erro string `json:"erro"`
+}
+
+type TrechoRest struct {
+	Recurso             string  `json:"recurso"`
+	EmpresaID           string  `json:"empresa_id"`
+	TrechoID            string  `json:"trecho_id"`
+	RotaID              string  `json:"rota_id"`
+	MotoristaID         string  `json:"motorista_id"`
+	Origem              string  `json:"origem"`
+	Destino             string  `json:"destino"`
+	Data                string  `json:"data"`
+	HorarioSaida        int     `json:"horario_saida"`
+	HorarioChegada      int     `json:"horario_chegada"`
+	AssentosDisponiveis int     `json:"assentos_disponiveis"`
+	Valor               float64 `json:"valor"`
+}
+
+type ItinerarioRest struct {
+	ID                  string       `json:"id"`
+	Trechos             []TrechoRest `json:"trechos"`
+	ValorTotal          float64      `json:"valor_total"`
+	AssentosDisponiveis int          `json:"assentos_disponiveis"`
+}
+
+type RespostaBuscaRest struct {
+	EmpresaID   string           `json:"empresa_id"`
+	Itinerarios []ItinerarioRest `json:"itinerarios"`
+}
 
 func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 	return &Servidor{Gerenciador: dominio.NovoGerenciadorComDiretorio(c.DiretorioDados)}
 }
 
-// HandlerEmpresa oferece somente a identidade; reservas distribuídas são outra etapa.
+func escreverJSON(w http.ResponseWriter, status int, valor interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(valor)
+}
+
+func rejeitarMetodo(w http.ResponseWriter, metodos ...string) {
+	w.Header().Set("Allow", strings.Join(metodos, ", "))
+	escreverJSON(w, http.StatusMethodNotAllowed, RespostaErroRest{Erro: "método não permitido"})
+}
+
+func trechoRest(e configuracao.Empresa, t dominio.Trecho) TrechoRest {
+	return TrechoRest{
+		Recurso: fmt.Sprintf("%s/%s", e.ID, t.ID), EmpresaID: e.ID,
+		TrechoID: t.ID, RotaID: t.RotaID, MotoristaID: t.MotoristaID,
+		Origem: t.Origem, Destino: t.Destino, Data: t.Data,
+		HorarioSaida: t.HorarioSaida, HorarioChegada: t.HorarioChegada,
+		AssentosDisponiveis: t.AssentosTotais - t.AssentosOcupados,
+		Valor:               t.Valor,
+	}
+}
+
 func HandlerEmpresa(e configuracao.Empresa) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/empresa", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			json.NewEncoder(w).Encode(map[string]string{"erro": "use GET"})
+			rejeitarMetodo(w, http.MethodGet)
 			return
 		}
-		json.NewEncoder(w).Encode(e)
+		escreverJSON(w, http.StatusOK, e)
 	})
+	return mux
+}
+
+func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.GerenciadorDeRotas) http.Handler {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/empresa", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			rejeitarMetodo(w, http.MethodGet)
+			return
+		}
+		escreverJSON(w, http.StatusOK, e)
+	})
+
+	mux.HandleFunc("/api/v1/empresa", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			rejeitarMetodo(w, http.MethodGet)
+			return
+		}
+		escreverJSON(w, http.StatusOK, e)
+	})
+
+	mux.HandleFunc("/api/v1/trechos/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			rejeitarMetodo(w, http.MethodGet)
+			return
+		}
+		trechoID := strings.TrimPrefix(r.URL.Path, "/api/v1/trechos/")
+		if trechoID == "" {
+			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "trecho não encontrado"})
+			return
+		}
+		trecho, existe := g.ObterTrecho(trechoID)
+		if !existe {
+			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "trecho não encontrado"})
+			return
+		}
+		escreverJSON(w, http.StatusOK, trechoRest(e, *trecho))
+	})
+
+	mux.HandleFunc("/api/v1/itinerarios/buscar", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			rejeitarMetodo(w, http.MethodPost)
+			return
+		}
+		var req RequisicaoBuscaRest
+		decodificador := json.NewDecoder(r.Body)
+		decodificador.DisallowUnknownFields()
+		if err := decodificador.Decode(&req); err != nil {
+			escreverJSON(w, http.StatusBadRequest, RespostaErroRest{Erro: "corpo JSON inválido"})
+			return
+		}
+		if strings.TrimSpace(req.Origem) == "" || strings.TrimSpace(req.Destino) == "" || strings.TrimSpace(req.Data) == "" {
+			escreverJSON(w, http.StatusUnprocessableEntity, RespostaErroRest{Erro: "origem, destino e data são obrigatórios"})
+			return
+		}
+
+		itinerarios := g.BuscarItinerarios(req.Origem, req.Destino, req.Data)
+		resposta := RespostaBuscaRest{EmpresaID: e.ID, Itinerarios: make([]ItinerarioRest, 0, len(itinerarios))}
+		for _, itinerario := range itinerarios {
+			trechos := make([]TrechoRest, 0, len(itinerario.Trechos))
+			for _, t := range itinerario.Trechos {
+				trechos = append(trechos, trechoRest(e, t))
+			}
+			resposta.Itinerarios = append(resposta.Itinerarios, ItinerarioRest{
+				ID: itinerario.ID, Trechos: trechos,
+				ValorTotal:          itinerario.ValorTotal,
+				AssentosDisponiveis: itinerario.AssentosDisponivel,
+			})
+		}
+		escreverJSON(w, http.StatusOK, resposta)
+	})
+
 	return mux
 }
 
@@ -46,7 +175,7 @@ func (s *Servidor) Executar(c configuracao.Configuracao) error {
 	}
 	defer hl.Close()
 	hs := &http.Server{
-		Handler:           HandlerEmpresa(c.Empresa),
+		Handler:           HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
