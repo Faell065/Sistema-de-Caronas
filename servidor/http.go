@@ -55,7 +55,10 @@ type DecisaoTransacaoRest struct {
 }
 
 func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
-	return &Servidor{Gerenciador: dominio.NovoGerenciadorComDiretorio(c.DiretorioDados)}
+	return &Servidor{
+		Gerenciador:  dominio.NovoGerenciadorComDiretorio(c.DiretorioDados),
+		Configuracao: &c,
+	}
 }
 
 func escreverJSON(w http.ResponseWriter, status int, valor interface{}) {

@@ -1,22 +1,28 @@
-//Sistema-de-Caronas/servidor/servidor.go
+// Sistema-de-Caronas/servidor/servidor.go
 package servidor
 
 import (
-	"fmt"
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net"
-	"projeto_redes/dominio" 
+	"sync"
+
+	"projeto_redes/configuracao"
+	"projeto_redes/dominio"
 	"projeto_redes/protocolo"
 )
 
-// O server tem de encapsular o gerenciador de rotas, que é o responsável por armazenar as rotas e trechos, para poder gerenciar as conxões de rede
 type Servidor struct {
-	Gerenciador *dominio.GerenciadorDeRotas
+	Gerenciador  *dominio.GerenciadorDeRotas
+	Configuracao *configuracao.Configuracao
+
+	muLamport sync.Mutex
+	Lamport   uint64
 }
 
-//Novo Servidor cria um novo servidor com um gerenciador de rotas
-func NovoServidor() *Servidor{
+// Novo Servidor cria um novo servidor com um gerenciador de rotas
+func NovoServidor() *Servidor {
 	Gerenciador := dominio.NovoGerenciador()
 	return &Servidor{Gerenciador: Gerenciador}
 }
@@ -46,7 +52,7 @@ func (s *Servidor) Iniciar(porta string) {
 // Metodo da classe Servidor para atender a conexão de um cliente (gerencia a conversa individual com cada um)
 func (s *Servidor) atenderCliente(conn net.Conn) {
 	defer conn.Close()
-	
+
 	reader := bufio.NewReader(conn)
 	mensagemBytes, err := reader.ReadBytes('\n') // lê até o final da linha
 	if err != nil {
@@ -97,7 +103,7 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 	case "BUSCAR_ITINERARIO":
 		// Busca itinerários com base na origem, destino e data informados
 		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.Data)
-		
+
 		dadosBytes, _ := json.Marshal(itinerarios)
 		resp = protocolo.Resposta{
 			Sucesso:   true,

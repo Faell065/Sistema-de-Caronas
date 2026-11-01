@@ -24,6 +24,7 @@ type Configuracao struct {
 	EnderecoHTTP   string    `json:"endereco_http"`
 	DiretorioDados string    `json:"diretorio_dados"`
 	Pares          []Empresa `json:"pares"`
+	ChaveHMAC      string    `json:"chave_hmac,omitempty"`
 }
 
 // Carregar não consulta a rede: um par fora do ar não impede a inicialização.

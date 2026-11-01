@@ -41,19 +41,21 @@ type GerenciadorDeRotas struct {
 	// Ela não deve ser mantida enquanto houver espera de rede em etapas futuras.
 	muOperacoes sync.Mutex
 
-	Trechos    map[string]*Trecho
-	Usuarios   map[string]*Usuario
-	Reservas   map[string]*Reserva
-	Transacoes map[string]*TransacaoLocal
+	Trechos               map[string]*Trecho
+	Usuarios              map[string]*Usuario
+	Reservas              map[string]*Reserva
+	Transacoes            map[string]*TransacaoLocal
+	TransacoesCoordenador map[string]*TransacaoCoordenador
 }
 
 func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
 	g := &GerenciadorDeRotas{
-		diretorioDados: diretorio,
-		Trechos:        make(map[string]*Trecho),
-		Usuarios:       make(map[string]*Usuario),
-		Reservas:       make(map[string]*Reserva),
-		Transacoes:     make(map[string]*TransacaoLocal),
+		diretorioDados:        diretorio,
+		Trechos:               make(map[string]*Trecho),
+		Usuarios:              make(map[string]*Usuario),
+		Reservas:              make(map[string]*Reserva),
+		Transacoes:            make(map[string]*TransacaoLocal),
+		TransacoesCoordenador: make(map[string]*TransacaoCoordenador),
 	}
 	g.CarregarDados()
 	return g

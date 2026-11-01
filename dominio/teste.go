@@ -1,6 +1,11 @@
-//Sistema-de-Caronas/dominio/teste.go
+// Sistema-de-Caronas/dominio/teste.go
 package dominio
-import ("fmt"; "encoding/json"; "projeto_redes/protocolo")
+
+import (
+	"encoding/json"
+	"fmt"
+	"projeto_redes/protocolo"
+)
 
 func TestBuscarItinerarios() {
 	gerenciador := NovoGerenciador()
@@ -41,16 +46,16 @@ func TestBuscarItinerarios() {
 func TestCriarRota() {
 	paradasViagem := []string{"Feira de Santana", "Salvador", "Ilheus", "Porto Seguro"}
 	minhaRota := CriarRota("Rota1", "Motorista1", paradasViagem, 5)
-	
+
 	fmt.Printf("Rota ID: %s\n (Motorista: %s)\n", minhaRota.ID, minhaRota.MotoristaID)
 	fmt.Println("Trechos gerados:")
-	for index, trecho:= range minhaRota.Trechos{
-		fmt.Printf("Trecho %d: %s -> %s | Assentos Totais: %d | Assentos Ocupados: %d\n", 
-		index+1, 
-		trecho.Origem, 
-		trecho.Destino, 
-		trecho.AssentosTotais, 
-		trecho.AssentosOcupados)
+	for index, trecho := range minhaRota.Trechos {
+		fmt.Printf("Trecho %d: %s -> %s | Assentos Totais: %d | Assentos Ocupados: %d\n",
+			index+1,
+			trecho.Origem,
+			trecho.Destino,
+			trecho.AssentosTotais,
+			trecho.AssentosOcupados)
 	}
 }
 
@@ -77,10 +82,10 @@ func TestCriarRota() {
 // 	} else {
 // 		fmt.Println("Reserva realizada com sucesso novamente!")
 // 	}
-	
+
 // }
 
-func TestRequisicao(){
+func TestRequisicao() {
 	req := protocolo.Requisicao{
 		TipoAcao:    "BUSCAR_ITINERARIO",
 		TipoUsuario: "passageiro",

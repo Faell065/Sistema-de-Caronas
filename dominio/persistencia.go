@@ -49,6 +49,17 @@ func cloneTransacoes(src map[string]*TransacaoLocal) map[string]*TransacaoLocal 
 	return dst
 }
 
+func cloneTransacoesCoordenador(src map[string]*TransacaoCoordenador) map[string]*TransacaoCoordenador {
+	dst := make(map[string]*TransacaoCoordenador, len(src))
+	for id, transacao := range src {
+		copiado := *transacao
+		copiado.Itens = append([]ItemTransacao(nil), transacao.Itens...)
+		copiado.Participantes = append([]EstadoParticipante(nil), transacao.Participantes...)
+		dst[id] = &copiado
+	}
+	return dst
+}
+
 // SalvarDados cria snapshots antes de acessar o disco. Assim persistência não
 // mantém uma trava do gerenciador durante operações de arquivo.
 func (g *GerenciadorDeRotas) SalvarDados() error {
@@ -66,6 +77,7 @@ func (g *GerenciadorDeRotas) SalvarDados() error {
 
 	g.muTransacoes.RLock()
 	transacoes := cloneTransacoes(g.Transacoes)
+	transacoesCoordenador := cloneTransacoesCoordenador(g.TransacoesCoordenador)
 	g.muTransacoes.RUnlock()
 
 	persistenciaMu.Lock()
@@ -76,10 +88,11 @@ func (g *GerenciadorDeRotas) SalvarDados() error {
 	}
 
 	for arquivo, dados := range map[string]interface{}{
-		"usuarios.json":   usuarios,
-		"trechos.json":    trechos,
-		"reservas.json":   reservas,
-		"transacoes.json": transacoes,
+		"usuarios.json":               usuarios,
+		"trechos.json":                trechos,
+		"reservas.json":               reservas,
+		"transacoes.json":             transacoes,
+		"transacoes_coordenador.json": transacoesCoordenador,
 	} {
 		bytes, err := json.MarshalIndent(dados, "", "  ")
 		if err != nil {
@@ -127,6 +140,15 @@ func (g *GerenciadorDeRotas) CarregarDados() {
 	}
 	if g.Transacoes == nil {
 		g.Transacoes = make(map[string]*TransacaoLocal)
+	}
+	g.muTransacoes.Unlock()
+
+	g.muTransacoes.Lock()
+	if dados, err := os.ReadFile(filepath.Join(g.diretorioDados, "transacoes_coordenador.json")); err == nil {
+		_ = json.Unmarshal(dados, &g.TransacoesCoordenador)
+	}
+	if g.TransacoesCoordenador == nil {
+		g.TransacoesCoordenador = make(map[string]*TransacaoCoordenador)
 	}
 	g.muTransacoes.Unlock()
 

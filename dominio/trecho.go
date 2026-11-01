@@ -48,6 +48,23 @@ type TransacaoLocal struct {
 	Motivo         string          `json:"motivo,omitempty"`
 }
 
+type EstadoParticipante struct {
+	EmpresaID string `json:"empresa_id"`
+	Estado    string `json:"estado"`
+}
+
+type TransacaoCoordenador struct {
+	ID             string               `json:"id"`
+	CoordenadorID  string               `json:"coordenador_id"`
+	Estado         string               `json:"estado"`
+	IdempotencyKey string               `json:"idempotency_key"`
+	PassageiroID   string               `json:"passageiro_id,omitempty"`
+	Lamport        uint64               `json:"lamport"`
+	Itens          []ItemTransacao      `json:"itens"`
+	Participantes  []EstadoParticipante `json:"participantes"`
+	Motivo         string               `json:"motivo,omitempty"`
+}
+
 // Rota é a viagem completa de um motorista, composta por vários trechos
 type Rota struct {
 	ID          string
@@ -77,3 +94,12 @@ type Reserva struct {
 	IDsTrechos   []string `json:"ids_trechos"`
 	Data         string   `json:"data"`
 }
+
+const (
+	EstadoCoordenadorInit        = "INIT"
+	EstadoCoordenadorPreparando  = "PREPARANDO"
+	EstadoCoordenadorPreparedAll = "PREPARED_ALL"
+	EstadoCoordenadorCommitted   = "COMMITTED"
+	EstadoCoordenadorAborted     = "ABORTED"
+	EstadoCoordenadorConfirmado  = "CONFIRMED"
+)
