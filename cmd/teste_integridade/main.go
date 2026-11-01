@@ -23,10 +23,8 @@ func main() {
 		}
 	}
 
-	fmt.Println("==================================================")
 	fmt.Printf("   TESTE DE INTEGRIDADE E REGRAS DE NEGÓCIO\n")
 	fmt.Printf("   Alvo: %s\n", enderecoServidor)
-	fmt.Println("==================================================\n")
 
 	// SETUP: Cadastra Motorista
 	respMot := enviarRequisicao(protocolo.Requisicao{
@@ -54,7 +52,7 @@ func main() {
 	// CENÁRIO 1: Testar Atomicidade (Reserva de Rota Multi-Trecho)
 	// ------------------------------------------------------------------
 	fmt.Println("--- CENÁRIO 1: Testando Atomicidade da Reserva Multi-Trecho ---")
-	
+
 	// Cria Rota A -> B (1 VAGA) e B -> C (5 VAGAS)
 	enviarRequisicao(protocolo.Requisicao{
 		TipoAcao:    "CADASTRAR_ROTA",
@@ -113,7 +111,8 @@ func main() {
 	// ------------------------------------------------------------------
 	// CENÁRIO 2: Restauração de Vagas após Cancelamento
 	// ------------------------------------------------------------------
-	fmt.Println("\n--- CENÁRIO 2: Cancelamento e Reciclagem de Vagas ---")
+	fmt.Println()
+	fmt.Println("--- CENÁRIO 2: Cancelamento e Reciclagem de Vagas ---")
 
 	// O passageiro cancela a primeira reserva que fez no Trecho A -> B
 	// Precisamos buscar as reservas do passageiro para pegar o ID da Reserva
@@ -123,15 +122,16 @@ func main() {
 		IDUsuario:   idPassageiro,
 	})
 
-	var reservas []dominio.Reserva
+	var reservas []map[string]interface{}
 	json.Unmarshal([]byte(respMinhasRes.DadosJSON), &reservas)
 
 	if len(reservas) > 0 {
-		idReservaParaCancelar := reservas[0].ID
-		
+		idReservaParaCancelar, _ := reservas[0]["id_reserva"].(string)
+
 		// Cancela
 		respCancel := enviarRequisicao(protocolo.Requisicao{
-			TipoAcao:  "CANCELAR_RESERVA_PASSAGEIRO",
+			TipoAcao:  "CANCELAR_RESERVA",
+			IDUsuario: idPassageiro,
 			IDReserva: idReservaParaCancelar,
 		})
 
@@ -153,7 +153,7 @@ func main() {
 		}
 	}
 
-	fmt.Println("\n==================================================")
+	fmt.Println("==================================================")
 	fmt.Println("   FIM DOS TESTES DE INTEGRIDADE")
 	fmt.Println("==================================================")
 }

@@ -24,6 +24,16 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 			return *existente, fmt.Errorf("transação foi abortada")
 		}
 		if existente.Estado == EstadoTransacaoPreparado || existente.Estado == EstadoTransacaoCommitConfirmado || existente.Estado == EstadoTransacaoCommitPersistido {
+			mesmoConteudo := existente.IdempotencyKey == tx.IdempotencyKey && existente.Operacao == tx.Operacao && len(existente.Itens) == len(tx.Itens)
+			for i := 0; mesmoConteudo && i < len(existente.Itens); i++ {
+				mesmoConteudo = existente.Itens[i] == tx.Itens[i]
+			}
+			if !mesmoConteudo {
+				g.muTrechos.Unlock()
+				g.muOperacoes.Unlock()
+				g.muTransacoes.Unlock()
+				return *existente, fmt.Errorf("mesmo tx_id usado com conteúdo diferente")
+			}
 			g.muTrechos.Unlock()
 			g.muOperacoes.Unlock()
 			g.muTransacoes.Unlock()
@@ -32,6 +42,8 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 		}
 	}
 
+	g.SequenciaPrecedencia++
+	tx.SequenciaProprietario = g.SequenciaPrecedencia
 	for _, item := range tx.Itens {
 		if item.Quantidade != 1 {
 			g.muTrechos.Unlock()
@@ -188,4 +200,31 @@ func (g *GerenciadorDeRotas) ConsultarTransacaoLocal(txID string) (TransacaoLoca
 	copia := *tx
 	copia.Itens = append([]ItemTransacao(nil), tx.Itens...)
 	return copia, true
+}
+
+func (g *GerenciadorDeRotas) CancelarReservaLocal(txID string) (TransacaoLocal, error) {
+	tx, existe := g.ConsultarTransacaoLocal(txID)
+	if !existe {
+		return TransacaoLocal{}, fmt.Errorf("transação %s não existe", txID)
+	}
+	if tx.Estado == EstadoTransacaoCancelado {
+		return tx, nil
+	}
+	g.muOperacoes.Lock()
+	g.muTrechos.Lock()
+	for _, item := range tx.Itens {
+		if trecho, ok := g.Trechos[item.TrechoID]; ok && trecho.AssentosOcupados >= item.Quantidade {
+			trecho.AssentosOcupados -= item.Quantidade
+		}
+	}
+	g.muTrechos.Unlock()
+	g.muTransacoes.Lock()
+	if atual, ok := g.Transacoes[txID]; ok {
+		atual.Estado = EstadoTransacaoCancelado
+		tx = *atual
+	}
+	g.muTransacoes.Unlock()
+	g.muOperacoes.Unlock()
+	_ = g.SalvarDados()
+	return tx, nil
 }

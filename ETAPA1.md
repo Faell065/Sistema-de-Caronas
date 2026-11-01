@@ -1,10 +1,45 @@
-# PBL 2 — etapa 1: identidade e configuração
+# VaiJunto — estado atual do PBL 2
 
-O binário é o mesmo em todas as empresas. O arquivo JSON define identidade, endereço TCP dos clientes, endereço HTTP, URL anunciada, pasta de dados e uma lista de pares de tamanho variável. A lista é carregada na inicialização: esta etapa não implementa descoberta automática nem entrada de membros durante uma transação.
+## Arquitetura implementada
+
+- Clientes permanecem em TCP nativo, com JSON delimitado por quebra de linha.
+- Cada instância mantém usuários, rotas, trechos, reservas e transações em diretórios separados.
+- Motorista publica somente na empresa do servidor local.
+- Servidores cooperam por HTTP REST configurável para pares conhecidos.
+- Não há servidor central nem descoberta automática de membros.
+
+## APIs REST atuais
+
+- `GET /api/empresa`
+- `GET /api/v1/empresa`
+- `GET /api/v1/trechos/{id}`
+- `POST /api/v1/itinerarios/buscar`
+- `POST /api/v1/itinerarios/buscar-distribuido`
+- `POST /api/v1/transacoes/{tx_id}/prepare`
+- `POST /api/v1/transacoes/{tx_id}/commit`
+- `POST /api/v1/transacoes/{tx_id}/abort`
+- `POST /api/v1/transacoes/{tx_id}/cancelar`
+- `GET /api/v1/transacoes/{tx_id}`
+
+## Reserva distribuída
+
+A reserva usa estado persistido por transação, holds locais e coordenador por transação. Itens são identificados pelo par `empresa_id/trecho_id`. A ordem das preparações é determinada pelos participantes; timeout não decide sozinho commit ou abort.
+
+Precedência é atribuída por uma sequência monotônica persistida quando o participante proprietário recebe pela primeira vez a preparação. Retransmissões usam o mesmo `tx_id` e não recebem nova sequência. Relógios físicos não são usados como critério.
+
+## Recuperação
+
+- Transações locais preparadas são identificadas ao reiniciar.
+- Transações coordenadoras persistidas são reclassificadas para retomada ou decisão.
+- `COMMIT` e `ABORT` repetidos são idempotentes.
+- Estados ambíguos não são convertidos em `ABORTED` por timeout.
+- Transações em `PREPARING` esperam decisão persistida ou recuperação externa.
+
+## Limites
+
+O sistema não foi validado em computadores distintos nem garante recuperação irrestrita sob perda permanente de dados, coordenador indefinidamente indisponível ou partição permanente. Trânsito HTTP usa HMAC opcional configurado por chave compartilhada.
 
 ## Execução local
-
-Na raiz do projeto, abra um terminal para cada comando:
 
 ```bash
 go run ./cmd/servidor -config config/empresa_a.json
@@ -12,64 +47,18 @@ go run ./cmd/servidor -config config/empresa_b.json
 go run ./cmd/servidor -config config/empresa_c.json
 ```
 
-| Empresa | TCP para os clientes | HTTP |
-|---|---|---|
-| A | 127.0.0.1:8080 | http://127.0.0.1:8081 |
-| B | 127.0.0.1:8090 | http://127.0.0.1:8091 |
-| C | 127.0.0.1:8100 | http://127.0.0.1:8101 |
+Docker local:
 
 ```bash
-go run ./cmd/cliente 127.0.0.1:8090
-curl -i http://127.0.0.1:8091/api/empresa
+make docker-up
+make docker-logs
+make docker-down
 ```
 
-`GET /api/empresa` retorna HTTP 200 com `id`, `nome` e `url` em JSON. Outro método retorna 405 e `Allow: GET`. Recurso inexistente retorna 404. Os pares ainda não são consultados automaticamente.
-
-## Configuração
-
-```json
-{
-  "empresa": {"id": "empresa_a", "nome": "VaiJunto", "url": "http://127.0.0.1:8081"},
-  "endereco_tcp": "127.0.0.1:8080",
-  "endereco_http": "127.0.0.1:8081",
-  "diretorio_dados": "../dados_empresas/empresa_a",
-  "pares": [
-    {"id": "empresa_b", "nome": "Empresa B", "url": "http://127.0.0.1:8091"}
-  ]
-}
-```
-
-`endereco_http` é onde esta instância escuta; `empresa.url` é onde as outras conseguem acessá-la. `0.0.0.0` serve para escutar em todas as interfaces, mas não deve ser anunciado como endereço de um par. A pasta de dados relativa é resolvida a partir da localização do JSON, não do diretório do terminal.
-
-Para adicionar D: crie outro JSON, dê um ID exclusivo, escolha portas disponíveis e uma pasta própria, e inclua D nas listas dos outros membros. Reinicie as instâncias para recarregar as listas. Não há limite de três no código. Esta versão não verifica a reciprocidade das listas nem detecta automaticamente configurações conflitantes entre computadores.
-
-Não execute duas instâncias sobre a mesma pasta de dados. Não reutilize o ID de uma empresa para representar outra. As instâncias de exemplo começam vazias: os arquivos antigos em dados_persistentados não são migrados nem apagados.
-
-## Docker
+## Validação implementada
 
 ```bash
-docker compose -f docker-compose.pbl2.yml up --build -d
-docker compose -f docker-compose.pbl2.yml logs -f
-docker compose -f docker-compose.pbl2.yml down
+CGO_ENABLED=0 go test ./... -vet=off
 ```
 
-Esse Compose cria três serviços no mesmo computador para desenvolvimento, com volumes separados. Os nomes empresa_a, empresa_b e empresa_c são resolvidos pela rede Docker desse Compose. Não execute o Compose antigo junto nas mesmas portas. O Compose padrão agora executa apenas a empresa A com seu próprio diretório novo.
-
-Para o laboratório, copie o projeto para cada computador, configure listeners em 0.0.0.0:8080 e 0.0.0.0:8081, publique as duas portas e substitua as URLs próprias e dos pares pelos IPs acessíveis dos computadores. O Compose local não substitui a demonstração em máquinas distintas exigida pelo enunciado.
-
-## Escopo e limites
-
-Implementado: configuração validada, quantidade variável de pares, diretório separado por instância, porta TCP configurável, endpoint HTTP de identidade e exemplos Docker.
-
-Não implementado nesta etapa: busca entre empresas, reservas distribuídas, Lamport, worker pool e recuperação de transações. O mutex global e a persistência antiga permanecem; ela ainda não é um diário transacional resistente a falhas. O registro de pares não é autenticação entre empresas. A API de exemplo usa HTTP sem TLS para o laboratório.
-
-## Validação
-
-```bash
-go test -race ./configuracao ./dominio ./servidor
-go build ./...
-```
-
-Os testes de configuração cobrem lista com 20 pares, IDs/URLs repetidos, campos desconhecidos e resolução de caminhos. Os demais verificam HTTP 200/405 e persistência isolada. Os executáveis antigos de teste de carga/integridade não foram corrigidos nesta etapa.
-
-Validação executada nesta entrega: testes com `-race` dos três pacotes acima, compilação de todos os pacotes e integração com três processos, consultando identidades por HTTP e cadastrando usuário por TCP exclusivamente em A. Docker não foi executado neste ambiente.
+Há testes temporários para concorrência local, última vaga, HMAC, rollback local, cancelamento, persistência e indisponibilidade remota simulada.

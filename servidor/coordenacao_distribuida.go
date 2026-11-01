@@ -117,6 +117,9 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 	}
 
 	_ = s.Gerenciador.SetEstadoCoordenador(txID, dominio.EstadoCoordenadorConfirmado)
+	if err := s.Gerenciador.CriarReservaDistribuida(txID, s.Configuracao.Empresa.ID, passageiroID, itens); err != nil {
+		return s.estadoCoordenador(txID), err
+	}
 	return s.estadoCoordenador(txID), nil
 }
 
@@ -164,4 +167,48 @@ func (s *Servidor) ParesParaSlice() []struct{ ID, Nome, URL string } {
 func (s *Servidor) TransacaoEmJSON(tx dominio.TransacaoCoordenador) []byte {
 	body, _ := json.Marshal(tx)
 	return body
+}
+
+func (s *Servidor) RecuperarTransacoes() {
+	if s.Configuracao == nil {
+		return
+	}
+	transacoes := s.Gerenciador.TransacoesCoordenadorasParaRetomar()
+	decisoes := s.Gerenciador.TransacoesComDecisaoPersistida()
+	cliente := NovoClienteREST(s.Configuracao.Empresa.ID, s.Configuracao.ChaveHMAC, 1500*time.Millisecond)
+	urls := make(map[string]string)
+	for _, par := range s.ParesParaSlice() {
+		urls[par.ID] = par.URL
+	}
+	for _, tx := range transacoes {
+		if tx.Estado == dominio.EstadoCoordenadorCommitted || tx.Estado == dominio.EstadoCoordenadorPreparedAll {
+			_ = s.Gerenciador.SetEstadoCoordenador(tx.ID, dominio.EstadoCoordenadorCommitted)
+		}
+	}
+	for _, tx := range decisoes {
+		if tx.Estado != dominio.EstadoCoordenadorCommitted && tx.Estado != dominio.EstadoCoordenadorAborted {
+			continue
+		}
+		acao := "abort"
+		if tx.Estado == dominio.EstadoCoordenadorCommitted {
+			acao = "commit"
+		}
+		for _, participante := range tx.Participantes {
+			if participante.EmpresaID == s.Configuracao.Empresa.ID {
+				if acao == "commit" {
+					_, _ = s.Gerenciador.CommitReservaLocal(tx.ID)
+				} else {
+					_, _ = s.Gerenciador.AbortReservaLocal(tx.ID, tx.Motivo)
+				}
+				continue
+			}
+			url, ok := urls[participante.EmpresaID]
+			if !ok {
+				continue
+			}
+			_, _, _ = cliente.ChamarComRepeticao(http.MethodPost,
+				strings.TrimRight(url, "/")+"/api/v1/transacoes/"+tx.ID+"/"+acao,
+				tx.IdempotencyKey, DecisaoTransacaoRest{ID: tx.ID, Motivo: tx.Motivo}, 3)
+		}
+	}
 }

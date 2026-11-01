@@ -67,6 +67,7 @@ func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 	for _, tx := range servidor.Gerenciador.TransacoesCoordenadorasParaRetomar() {
 		fmt.Printf("[RECUPERAÇÃO] Transação coordenadora deve ser retomada: %s estado=%s\n", tx.ID, tx.Estado)
 	}
+	go servidor.RecuperarTransacoes()
 	return servidor
 }
 
@@ -288,6 +289,13 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 		switch acao {
 		case "commit":
 			resultado, err := g.CommitReservaLocal(txID)
+			if err != nil {
+				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: err.Error()})
+				return
+			}
+			escreverJSON(w, http.StatusOK, resultado)
+		case "cancelar":
+			resultado, err := g.CancelarReservaLocal(txID)
 			if err != nil {
 				escreverJSON(w, http.StatusConflict, RespostaErroRest{Erro: err.Error()})
 				return

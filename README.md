@@ -115,3 +115,19 @@ Após criar uma conta e anotar o seu **ID de Acesso**, faça o Login.
 
 
 - **Bloqueio de Overbooking:** Travas de exclusão (Mutexes) garantem que em caso de acesso em massa, o assento fique para a requisição que fechar o TCP primeiro. Nenhuma reserva parcial (conseguir apenas metade de uma viagem mista) ocorre dentro do fluxo do `GerenciadorDeRotas`.
+
+## Estado atual — PBL 2
+
+Este documento descreve originalmente o sistema centralizado do PBL 1. A configuração atual implementa três instâncias independentes, comunicação REST servidor-servidor, TCP cliente-servidor, holds persistidos e transações preparadas localmente.
+
+Execute a emulação local com:
+
+```bash
+make docker-up
+make docker-logs
+make docker-down
+```
+
+O código não promete recuperação após perda permanente de dados ou coordenação em consenso. Timeout, indisponibilidade ou reinício podem deixar uma transação aguardando decisão persistida, sem confirmação parcial apresentada ao passageiro como sucesso.
+
+A documentação histórica completa está separada em `ETAPA1.md`; ela ainda precisa ser atualizada integralmente antes da entrega acadêmica.

@@ -27,6 +27,7 @@ const (
 	EstadoTransacaoAbortado         = "ABORTADO"
 	EstadoTransacaoCommitPersistido = "COMMIT_PERSISTIDO"
 	EstadoTransacaoConfirmadoGlobal = "CONFIRMADO"
+	EstadoTransacaoCancelado        = "CANCELADO"
 )
 
 type ItemTransacao struct {
@@ -36,18 +37,19 @@ type ItemTransacao struct {
 }
 
 type TransacaoLocal struct {
-	ID             string          `json:"id"`
-	CoordenadorID  string          `json:"coordenador_id"`
-	EmpresaID      string          `json:"empresa_id"`
-	Papel          string          `json:"papel"`
-	Operacao       string          `json:"operacao"`
-	Estado         string          `json:"estado"`
-	IdempotencyKey string          `json:"idempotency_key,omitempty"`
-	PassageiroID   string          `json:"passageiro_id,omitempty"`
-	Data           string          `json:"data,omitempty"`
-	Lamport        uint64          `json:"lamport"`
-	Itens          []ItemTransacao `json:"itens"`
-	Motivo         string          `json:"motivo,omitempty"`
+	ID                    string          `json:"id"`
+	CoordenadorID         string          `json:"coordenador_id"`
+	EmpresaID             string          `json:"empresa_id"`
+	Papel                 string          `json:"papel"`
+	Operacao              string          `json:"operacao"`
+	Estado                string          `json:"estado"`
+	IdempotencyKey        string          `json:"idempotency_key,omitempty"`
+	PassageiroID          string          `json:"passageiro_id,omitempty"`
+	Data                  string          `json:"data,omitempty"`
+	Lamport               uint64          `json:"lamport"`
+	Itens                 []ItemTransacao `json:"itens"`
+	Motivo                string          `json:"motivo,omitempty"`
+	SequenciaProprietario uint64          `json:"sequencia_proprietario,omitempty"`
 }
 
 type EstadoParticipante struct {
@@ -91,12 +93,13 @@ type Usuario struct {
 }
 
 type Reserva struct {
-	ID           string   `json:"id"`
-	PassageiroID string   `json:"passageiro_id"`
-	IDsTrechos   []string `json:"ids_trechos"`
-	Data         string   `json:"data"`
-	EmpresaID    string   `json:"empresa_id,omitempty"`
-	Recurso      string   `json:"recurso,omitempty"`
+	ID           string          `json:"id"`
+	PassageiroID string          `json:"passageiro_id"`
+	IDsTrechos   []string        `json:"ids_trechos"`
+	Data         string          `json:"data"`
+	EmpresaID    string          `json:"empresa_id,omitempty"`
+	Recurso      string          `json:"recurso,omitempty"`
+	Itens        []ItemTransacao `json:"itens,omitempty"`
 }
 
 const (

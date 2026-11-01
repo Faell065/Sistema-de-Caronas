@@ -86,3 +86,33 @@ func (g *GerenciadorDeRotas) ConsultarTransacaoCoordenador(txID string) (Transac
 	copia.Participantes = append([]EstadoParticipante(nil), tx.Participantes...)
 	return copia, true
 }
+
+func (g *GerenciadorDeRotas) CriarReservaDistribuida(txID, empresaID, passageiroID string, itens []ItemTransacao) error {
+	g.muReservas.Lock()
+	ids := make([]string, 0, len(itens))
+	for _, item := range itens {
+		ids = append(ids, item.EmpresaID+"/"+item.TrechoID)
+	}
+	g.Reservas[txID] = &Reserva{
+		ID: txID, PassageiroID: passageiroID,
+		IDsTrechos: ids, Itens: append([]ItemTransacao(nil), itens...),
+		EmpresaID: empresaID,
+		Data:      "",
+	}
+	g.muReservas.Unlock()
+	return g.SalvarDados()
+}
+
+func (g *GerenciadorDeRotas) RemoverReservaDistribuida(passageiroID, reservaID string) ([]ItemTransacao, bool) {
+	g.muReservas.Lock()
+	reserva, existe := g.Reservas[reservaID]
+	if !existe || reserva.PassageiroID != passageiroID {
+		g.muReservas.Unlock()
+		return nil, false
+	}
+	itens := append([]ItemTransacao(nil), reserva.Itens...)
+	delete(g.Reservas, reservaID)
+	g.muReservas.Unlock()
+	_ = g.SalvarDados()
+	return itens, true
+}

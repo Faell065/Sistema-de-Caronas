@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"projeto_redes/configuracao"
 	"projeto_redes/dominio"
@@ -110,17 +113,25 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 				trechos := make([]dominio.Trecho, 0, len(caminho.Trechos))
 				for _, trechoRest := range caminho.Trechos {
 					trechos = append(trechos, dominio.Trecho{
-						ID: trechoRest.TrechoID, RotaID: trechoRest.RotaID,
-						MotoristaID: trechoRest.MotoristaID, Origem: trechoRest.Origem,
-						Destino: trechoRest.Destino, Data: trechoRest.Data,
-						HorarioSaida: trechoRest.HorarioSaida, HorarioChegada: trechoRest.HorarioChegada,
-						AssentosTotais: trechoRest.AssentosDisponiveis, Valor: trechoRest.Valor,
-						EmpresaID: trechoRest.EmpresaID, Recurso: trechoRest.Recurso,
+						ID:             trechoRest.TrechoID,
+						RotaID:         trechoRest.RotaID,
+						MotoristaID:    trechoRest.MotoristaID,
+						Origem:         trechoRest.Origem,
+						Destino:        trechoRest.Destino,
+						Data:           trechoRest.Data,
+						HorarioSaida:   trechoRest.HorarioSaida,
+						HorarioChegada: trechoRest.HorarioChegada,
+						AssentosTotais: trechoRest.AssentosDisponiveis,
+						Valor:          trechoRest.Valor,
+						EmpresaID:      trechoRest.EmpresaID,
+						Recurso:        trechoRest.Recurso,
 					})
 				}
 				itinerariosDistribuidos = append(itinerariosDistribuidos, dominio.Itinerario{
-					ID: caminho.ID, Trechos: trechos,
-					ValorTotal: caminho.ValorTotal, AssentosDisponivel: caminho.AssentosDisponiveis,
+					ID:                 caminho.ID,
+					Trechos:            trechos,
+					ValorTotal:         caminho.ValorTotal,
+					AssentosDisponivel: caminho.AssentosDisponiveis,
 				})
 			}
 			itinerarios = itinerariosDistribuidos
@@ -178,6 +189,26 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "CANCELAR_RESERVA":
+		if s.Configuracao != nil {
+			if itens, existe := s.Gerenciador.RemoverReservaDistribuida(req.IDUsuario, req.IDReserva); existe {
+				for _, item := range itens {
+					if item.EmpresaID == s.Configuracao.Empresa.ID {
+						_, _ = s.Gerenciador.CancelarReservaLocal(req.IDReserva)
+						continue
+					}
+					for _, par := range s.Configuracao.Pares {
+						if par.ID == item.EmpresaID {
+							cliente := NovoClienteREST(s.Configuracao.Empresa.ID, s.Configuracao.ChaveHMAC, 1500*time.Millisecond)
+							_, _, _ = cliente.ChamarComRepeticao(http.MethodPost,
+								strings.TrimRight(par.URL, "/")+"/api/v1/transacoes/"+req.IDReserva+"/cancelar",
+								req.IDReserva, DecisaoTransacaoRest{ID: req.IDReserva}, 3)
+						}
+					}
+				}
+				resp = protocolo.Resposta{Sucesso: true, Mensagem: "Reserva distribuída cancelada."}
+				break
+			}
+		}
 		sucesso, msg := s.Gerenciador.CancelarReservaPassageiro(req.IDUsuario, req.IDReserva)
 		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
 

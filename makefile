@@ -22,14 +22,14 @@ run-teste-integridade: ## Testa a integridade do sistema em cenarios complexos d
 
 ##@ Docker
 
-docker-up: ## Inicializa e recria os containers em segundo plano (background)
-	docker compose up --build -d
+docker-up: ## Inicializa as três empresas PBL2 em background via Compose
+	docker compose -f docker-compose.pbl2.yml up --build -d
 
-docker-down: ## Para e remove os containers ativos
-	docker compose down
+docker-down: ## Para e remove os containers PBL2
+	docker compose -f docker-compose.pbl2.yml down
 
-docker-logs: ## Exibe e acompanha os logs dos containers em tempo real
-	docker compose logs -f
+docker-logs: ## Exibe os logs das três empresas
+	docker compose -f docker-compose.pbl2.yml logs -f
 
 ##@ Manutenção
 

@@ -34,6 +34,7 @@ func cloneReservas(src map[string]*Reserva) map[string]*Reserva {
 	for id, reserva := range src {
 		copiado := *reserva
 		copiado.IDsTrechos = append([]string(nil), reserva.IDsTrechos...)
+		copiado.Itens = append([]ItemTransacao(nil), reserva.Itens...)
 		dst[id] = &copiado
 	}
 	return dst
@@ -98,7 +99,27 @@ func (g *GerenciadorDeRotas) SalvarDados() error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(g.diretorioDados, arquivo), bytes, 0644); err != nil {
+		destino := filepath.Join(g.diretorioDados, arquivo)
+		temporario, err := os.CreateTemp(g.diretorioDados, arquivo+".tmp-")
+		if err != nil {
+			return err
+		}
+		if err := temporario.Chmod(0644); err != nil {
+			temporario.Close()
+			return err
+		}
+		if _, err := temporario.Write(bytes); err != nil {
+			temporario.Close()
+			return err
+		}
+		if err := temporario.Sync(); err != nil {
+			temporario.Close()
+			return err
+		}
+		if err := temporario.Close(); err != nil {
+			return err
+		}
+		if err := os.Rename(temporario.Name(), destino); err != nil {
 			return err
 		}
 	}
@@ -140,6 +161,11 @@ func (g *GerenciadorDeRotas) CarregarDados() {
 	}
 	if g.Transacoes == nil {
 		g.Transacoes = make(map[string]*TransacaoLocal)
+	}
+	for _, tx := range g.Transacoes {
+		if tx.SequenciaProprietario > g.SequenciaPrecedencia {
+			g.SequenciaPrecedencia = tx.SequenciaProprietario
+		}
 	}
 	g.muTransacoes.Unlock()
 

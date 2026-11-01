@@ -46,6 +46,7 @@ type GerenciadorDeRotas struct {
 	Reservas              map[string]*Reserva
 	Transacoes            map[string]*TransacaoLocal
 	TransacoesCoordenador map[string]*TransacaoCoordenador
+	SequenciaPrecedencia  uint64
 }
 
 func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
@@ -169,7 +170,7 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 
 			for _, t := range caminhoAtual {
 				valorTotal += t.Valor
-				vagasRestantes := t.AssentosTotais - t.AssentosOcupados
+				vagasRestantes := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
 				if vagasRestantes < minAssentos {
 					minAssentos = vagasRestantes
 				}
@@ -231,7 +232,7 @@ func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, stri
 		if !existe {
 			return false, fmt.Sprintf("Trecho %s não existe mais.", idTrecho)
 		}
-		if trecho.AssentosOcupados >= trecho.AssentosTotais {
+		if trecho.AssentosOcupados+trecho.AssentosPreparados >= trecho.AssentosTotais {
 			return false, fmt.Sprintf("O trecho de %s para %s esgotou as vagas!", trecho.Origem, trecho.Destino)
 		}
 	}
@@ -341,7 +342,7 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 			g.muOperacoes.Unlock()
 			return false, fmt.Sprintf("Trecho %s não existe mais.", idTrecho), ""
 		}
-		if trecho.AssentosOcupados >= trecho.AssentosTotais {
+		if trecho.AssentosOcupados+trecho.AssentosPreparados >= trecho.AssentosTotais {
 			g.muTrechos.Unlock()
 			g.muOperacoes.Unlock()
 			return false, fmt.Sprintf("O trecho de %s para %s esgotou as vagas!", trecho.Origem, trecho.Destino), ""
@@ -381,13 +382,18 @@ func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map
 			var trechosReserva []Trecho
 			var valorTotal float64
 			for _, idT := range res.IDsTrechos {
-				if t, ok := g.Trechos[idT]; ok {
+				idLocal := idT
+				if barra := strings.LastIndex(idT, "/"); barra >= 0 {
+					idLocal = idT[barra+1:]
+				}
+				if t, ok := g.Trechos[idLocal]; ok {
 					trechosReserva = append(trechosReserva, *t)
 					valorTotal += t.Valor
 				}
 			}
 			lista = append(lista, map[string]interface{}{
 				"id_reserva":  res.ID,
+				"itens":       res.Itens,
 				"trechos":     trechosReserva,
 				"valor_total": valorTotal,
 			})
