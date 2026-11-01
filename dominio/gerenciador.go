@@ -150,7 +150,8 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 	// Filtra apenas trechos da data correta
 	var trechosValidos []Trecho
 	for _, t := range g.Trechos {
-		if t.Data == data && t.AssentosOcupados < t.AssentosTotais {
+		livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
+		if t.Data == data && livres > 0 {
 			trechosValidos = append(trechosValidos, *t)
 		}
 	}

@@ -2,12 +2,14 @@ package servidor
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"projeto_redes/configuracao"
 	"projeto_redes/dominio"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIdentidadeHTTP(t *testing.T) {
@@ -160,5 +162,31 @@ func TestContratoRestTransacaoAbort(t *testing.T) {
 	trecho, _ := g.ObterTrecho("t1")
 	if trecho.AssentosPreparados != 0 || trecho.AssentosOcupados != 0 {
 		t.Fatalf("abort REST deixou estado incorreto: %+v", trecho)
+	}
+}
+
+func TestValidarAssinaturaServidorServidor(t *testing.T) {
+	chave := "chave-compartilhada-teste"
+	corpo := []byte(`{"id":"tx-1"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/transacoes/tx-1/prepare", strings.NewReader(string(corpo)))
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	request.Header.Set("X-VaiJunto-Timestamp", timestamp)
+	request.Header.Set("X-VaiJunto-Empresa-ID", "empresa_a")
+	request.Header.Set("X-VaiJunto-Idempotency-Key", "tx-1")
+	request.Header.Set("X-VaiJunto-Signature", AssinarCorpo(chave, http.MethodPost,
+		request.URL.RequestURI(), timestamp, "empresa_a", "tx-1", string(corpo)))
+	if !ValidarAssinatura(chave, request, corpo) {
+		t.Fatal("assinatura válida foi rejeitada")
+	}
+
+	request.Header.Set("X-VaiJunto-Signature", AssinarCorpo(chave, http.MethodPost,
+		request.URL.RequestURI(), timestamp, "empresa_a", "tx-1", `{"id":"alterado"}`))
+	if ValidarAssinatura(chave, request, corpo) {
+		t.Fatal("assinatura de corpo alterado foi aceita")
+	}
+
+	request.Header.Set("X-VaiJunto-Timestamp", "1")
+	if ValidarAssinatura(chave, request, corpo) {
+		t.Fatal("timestamp vencido foi aceito")
 	}
 }

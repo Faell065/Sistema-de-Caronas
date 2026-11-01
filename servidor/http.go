@@ -57,10 +57,17 @@ type DecisaoTransacaoRest struct {
 }
 
 func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
-	return &Servidor{
+	servidor := &Servidor{
 		Gerenciador:  dominio.NovoGerenciadorComDiretorio(c.DiretorioDados),
 		Configuracao: &c,
 	}
+	for _, tx := range servidor.Gerenciador.TransacoesQuePrecisamRecuperacao() {
+		fmt.Printf("[RECUPERAÇÃO] Transação local aguarda decisão: %s estado=%s\n", tx.ID, tx.Estado)
+	}
+	for _, tx := range servidor.Gerenciador.TransacoesCoordenadorasParaRetomar() {
+		fmt.Printf("[RECUPERAÇÃO] Transação coordenadora deve ser retomada: %s estado=%s\n", tx.ID, tx.Estado)
+	}
+	return servidor
 }
 
 func escreverJSON(w http.ResponseWriter, status int, valor interface{}) {
@@ -80,7 +87,7 @@ func trechoRest(e configuracao.Empresa, t dominio.Trecho) TrechoRest {
 		TrechoID: t.ID, RotaID: t.RotaID, MotoristaID: t.MotoristaID,
 		Origem: t.Origem, Destino: t.Destino, Data: t.Data,
 		HorarioSaida: t.HorarioSaida, HorarioChegada: t.HorarioChegada,
-		AssentosDisponiveis: t.AssentosTotais - t.AssentosOcupados,
+		AssentosDisponiveis: t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados,
 		Valor:               t.Valor,
 	}
 }
@@ -169,6 +176,30 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 			})
 		}
 		escreverJSON(w, http.StatusOK, resposta)
+	})
+
+	mux.HandleFunc("/api/v1/itinerarios/buscar-distribuido", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			rejeitarMetodo(w, http.MethodPost)
+			return
+		}
+		var req RequisicaoBuscaRest
+		decodificador := json.NewDecoder(r.Body)
+		decodificador.DisallowUnknownFields()
+		if err := decodificador.Decode(&req); err != nil {
+			escreverJSON(w, http.StatusBadRequest, RespostaErroRest{Erro: "corpo JSON inválido"})
+			return
+		}
+		if strings.TrimSpace(req.Origem) == "" || strings.TrimSpace(req.Destino) == "" || strings.TrimSpace(req.Data) == "" {
+			escreverJSON(w, http.StatusUnprocessableEntity, RespostaErroRest{Erro: "origem, destino e data são obrigatórios"})
+			return
+		}
+		if len(configuracoes) == 0 {
+			escreverJSON(w, http.StatusOK, RespostaBuscaDistribuida{EmpresaID: e.ID})
+			return
+		}
+		servidorDistribuido := &Servidor{Gerenciador: g, Configuracao: &configuracoes[0]}
+		escreverJSON(w, http.StatusOK, servidorDistribuido.BuscarDistribuido(req.Origem, req.Destino, req.Data))
 	})
 
 	mux.HandleFunc("/api/v1/transacoes/", func(w http.ResponseWriter, r *http.Request) {
