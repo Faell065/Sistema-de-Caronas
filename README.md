@@ -1,126 +1,94 @@
-> **PBL 2:** consulte [ETAPA1.md](ETAPA1.md) para a execução atual com empresas independentes. O manual abaixo descreve a versão original do PBL 1.
+# VaiJunto — Consórcio Distribuído de Caronas
 
-# Sistema-de-Caronas (VaiJunto)
-O **VaiJunto** é um sistema distribuído projetado para gerenciamento e reserva de caronas com múltiplas paradas. O projeto divide-se estruturalmente em componentes de Cliente (passagerios e motoristas) e Servidor (gerenciador e banco de dados JSON), se comunicando nativamente por meio de Sockets TCP.
+Sistema acadêmico de caronas desenvolvido em Go para o Problema 2 da disciplina TEC502. O projeto mantém uma instância independente para cada empresa e permite que passageiros reservem itinerários combinando caronas publicadas em diferentes servidores.
 
-Este README serve como manual de instrução, execução via Makefile e documentação de integração de rede.
+O sistema anterior, centralizado e desenvolvido no PBL 1, está documentado em [`PBL1.md`](PBL1.md).
 
-## 1) Visão Rápida da Conexão
+## Funcionalidades
 
-- **Cliente -> Servidor**: Comunicação direta via `TCP`, configurada para rodar na porta `8080`.
+- Três ou mais empresas configuráveis por arquivos JSON.
+- Cada empresa mantém seus próprios usuários, caronas, reservas e dados persistentes.
+- Clientes motorista e passageiro continuam acessando exclusivamente sua empresa por TCP.
+- Comunicação entre servidores por API REST.
+- Busca de itinerários locais e compostos por diferentes empresas.
+- Recursos identificados pelo par `empresa_id/trecho_id`.
+- Holds temporários persistidos durante transações distribuídas.
+- Máquinas de estados locais para `PREPARE`, `COMMIT`, `ABORT` e `CANCELAR`.
+- Repetição segura de mensagens já processadas pelo mesmo `tx_id`.
+- HMAC opcional entre servidores configurado por chave compartilhada.
+- Persistência em JSON e recuperação básica após reinício.
+- Docker Compose para emulação local das três empresas.
 
+## Arquitetura
 
+- `cmd/cliente`: cliente de terminal para motorista e passageiro.
+- `cmd/servidor`: inicialização configurada das instâncias.
+- `cmd/teste_carga` e `cmd/teste_integridade`: simuladores de carga e integridade legados em correção.
+- `configuracao`: identidade e configuração das empresas e pares.
+- `dominio`: usuários, trechos, rotas, reservas, transações e persistência.
+- `protocolo`: envelope das mensagens TCP.
+- `servidor`: gerenciamento TCP, REST, busca e coordenação.
 
-- **Protocolo de Comunicação**: Camada de aplicação própria utilizando serialização em formato `JSON`. As mensagens trafegam encapsuladas através de delimitadores padrão de quebra de linha (`\n`).
+## Pré-requisitos
 
+- Go 1.27 ou versão compatível declarada em `go.mod`.
+- Docker e Docker Compose para executar o ambiente com três empresas.
+- GCC apenas para executações com o detector de corrida Go (`-race`), se disponível no sistema.
 
+## Instalação
 
+Clone ou obtenha o projeto e entre na raiz:
 
-Fluxo básico:
-
-1. O `servidor` é instanciado em plano de fundo ou local, restaurando dados anteriores em disco e escutando por conexões TCP ativas.
-
-
-
-2. Os `clientes` (Motoristas ou Passageiros) abrem uma sessão de socket.
-
-
-
-3. O servidor roteia as solicitações concorrentes através de blocos isolados com Mutex (`sync.RWMutex`), lidando atomicamente com o agendamento de assentos.
-
-
-
-4. O servidor devolve uma notificação assíncrona (`Sucesso=true/false`) confirmando as operações.
-
-
-
-
-## 2) Manual de Execução (Makefile)
-
-O projeto acompanha um `Makefile` configurado para automatizar os builds e os processos de emulação e testes de concorrência.
-
-### 2.1 Servidor e Ambiente Docker
-
-A hospedagem principal lida com o roteamento e com a lógica de caminhos e itinerários baseada em DFS.
-
-Comandos principais para emulação via *containers*:
-
-Bash
-
-```
-make docker-up      # Inicializa e recria o servidor VaiJunto em background via Compose
-make docker-down    # Encerra os containers ativos e remove as redes criadas
-make docker-logs    # Exibe os logs do servidor em tempo real
-
+```bash
+cd Sistema-de-Caronas
+go mod download
 ```
 
-Para executar o servidor nativamente no terminal:
+Compile todos os pacotes:
 
-Bash
-
-```
-make run-servidor   # Inicializa o listener na porta 8080 em modo local
-
+```bash
+go build ./...
 ```
 
-### 2.2 Aplicação do Cliente
+## Configuração das empresas
 
-A interface do cliente possui menus adaptativos que se transformam de acordo com a escolha entre *Motorista* ou *Passageiro*.
+A instância recebe um arquivo JSON por meio de `-config`.
 
-Bash
+Exemplos locais:
 
+- `config/empresa_a.json`
+- `config/empresa_b.json`
+- `config/empresa_c.json`
+
+Exemplos Docker:
+
+- `config/docker/empresa_a.json`
+- `config/docker/empresa_b.json`
+- `config/docker/empresa_c.json`
+
+Cada arquivo define identidade, URLs, portas TCP/HTTP, diretório de dados e lista de pares. Os IDs das empresas devem ser exclusivos.
+
+## Como executar localmente
+
+Abra um terminal para cada instância:
+
+```bash
+go run ./cmd/servidor -config config/empresa_a.json
+go run ./cmd/servidor -config config/empresa_b.json
+go run ./cmd/servidor -config config/empresa_c.json
 ```
-make run-cliente    # Executa a aplicação do cliente. Por padrão, aponta para 127.0.0.1:8080
 
+Em outro terminal, conecte o cliente à própria empresa:
+
+```bash
+go run ./cmd/cliente 127.0.0.1:8080
 ```
 
-*(Nota: Para apontar o cliente a um IP de rede local externo, basta utilizar* *`go run cmd/cliente/main.go [SEU_IP]:8080`**)*.
+Clientes podem apontar para A, B ou C pelas respectivas portas TCP configuradas.
 
-### 2.3 Ferramentas de Manutenção e Estresse
+## Como executar com Docker
 
-Bash
-
-```
-make run-teste-concorrencia # Inicializa um teste que dispara 10 clientes disputando 2 vagas simultaneamente 
-make clean-data             # Formata o banco JSON e deleta todo o estado persistido das caronas
-
-```
-
-## 3) Como usar o Menu do Cliente
-
-Ao conectar, você deverá informar se é Motorista ou Passageiro.
-
-Após criar uma conta e anotar o seu **ID de Acesso**, faça o Login.
-
-### Modo Motorista
-
-**1) Adicionar Rota Completa:** Crie a viagem adicionando iterativamente a cidade de Origem e as respectivas cidades subsequentes. Para cada trecho criado, o sistema solicitará o horário de saída daquela cidade, valor fracionado do trecho e total de assentos.
-
-**2) Minhas Rotas Publicadas:** Exibe os trechos independentes que você possui no sistema e o status atual da ocupação (`0/4`).
-
-**3) Cancelar Rota Publicada:** Encerra a viagem informando o `ID` gerado na publicação.
-
-### Modo Passageiro
-
-**1) Buscar e Reservar Itinerário:** Digite Origem, Destino e Data. O sistema executará uma busca profunda e lhe entregará as rotas diretas, ou, caso não exista caminho direto, conectará motoristas diferentes apresentando um roteiro segmentado para você. Escolha o número desejado para efetivar. O sistema garante que a transação inteira ocorra de modo atômico.
-
-**2) Minhas Reservas:** Visualize seu histórico de embarque com chaves de ID e somatório dos valores dos trechos adquiridos.
-
-**3) Cancelar Reserva:** Informando o ID da Reserva, você cancela a ida e, automaticamente, suas vagas ocupadas são devolvidas ao banco do servidor para que outras pessoas comprem.
-
-## Robustez e Concorrência
-
-- A aplicação impede matematicamente inconsistências temporais (um passageiro tentar buscar um trecho cujo horário de chegada é anterior ao da saída).
-
-
-
-- **Bloqueio de Overbooking:** Travas de exclusão (Mutexes) garantem que em caso de acesso em massa, o assento fique para a requisição que fechar o TCP primeiro. Nenhuma reserva parcial (conseguir apenas metade de uma viagem mista) ocorre dentro do fluxo do `GerenciadorDeRotas`.
-
-## Estado atual — PBL 2
-
-Este documento descreve originalmente o sistema centralizado do PBL 1. A configuração atual implementa três instâncias independentes, comunicação REST servidor-servidor, TCP cliente-servidor, holds persistidos e transações preparadas localmente.
-
-Execute a emulação local com:
+A emulação local das três empresas usa:
 
 ```bash
 make docker-up
@@ -128,6 +96,43 @@ make docker-logs
 make docker-down
 ```
 
-O código não promete recuperação após perda permanente de dados ou coordenação em consenso. Timeout, indisponibilidade ou reinício podem deixar uma transação aguardando decisão persistida, sem confirmação parcial apresentada ao passageiro como sucesso.
+Os dados ficam isolados em `dados_empresas/empresa_a`, `dados_empresas/empresa_b` e `dados_empresas/empresa_c`. Não migre, apague ou sobrescreva os dados antigos em `dados_persistentados` sem autorização.
 
-A documentação histórica completa está separada em `ETAPA1.md`; ela ainda precisa ser atualizada integralmente antes da entrega acadêmica.
+Para o laboratório com computadores distintos, copie o projeto para cada máquina, ajuste listeners para `0.0.0.0`, publique TCP e HTTP e substitua URLs e IPs dos pares pelos endereços acessíveis.
+
+## Testes
+
+Execute os testes da suíte atual:
+
+```bash
+CGO_ENABLED=0 go test ./...
+```
+
+Os testes usam diretórios temporários ou servidores HTTP em memória quando podem modificar estado.
+
+## Comunicação REST
+
+A comunicação entre empresas inclui recursos de identidade, busca local, consulta de trecho e operações de transação. O formato completo dos recursos, métodos, códigos e exemplos será documentado em um relatório técnico; o README mantém apenas uma visão operacional.
+
+## Tecnologias utilizadas
+
+- Go.
+- TCP nativo com JSON delimitado por quebra de linha.
+- HTTP REST.
+- HTTP standard library.
+- Goroutines, mutexes e estruturas concorrentes.
+- Arquivos JSON como persistência.
+- Docker e Docker Compose.
+- HMAC-SHA256 opcional para mensagens entre empresas.
+
+## Limites conhecidos
+
+- A solução não foi validada em computadores físicos separados.
+- Timeout não é tratado como autorização automática de commit ou abort.
+- Transações preparadas podem aguardar quando coordenador ou participante estiver indisponível.
+- Não há consenso, replicação distribuída ou tolerância a perda permanente de disco.
+- A autenticação HMAC protege integridade entre servidores conhecidos, mas não substitui autorização, gerenciamento seguro de certificados ou confiança do participante.
+
+## Documentação histórica
+
+A implementação anterior centralizada está registrada em [`PBL1.md`](PBL1.md).
