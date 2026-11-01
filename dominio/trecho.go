@@ -16,6 +16,8 @@ type Trecho struct {
 	AssentosOcupados   int     `json:"assentos_ocupados"`
 	AssentosPreparados int     `json:"assentos_preparados,omitempty"`
 	Valor              float64 `json:"valor"`
+	EmpresaID          string  `json:"empresa_id,omitempty"`
+	Recurso            string  `json:"recurso,omitempty"`
 }
 
 const (
@@ -93,6 +95,8 @@ type Reserva struct {
 	PassageiroID string   `json:"passageiro_id"`
 	IDsTrechos   []string `json:"ids_trechos"`
 	Data         string   `json:"data"`
+	EmpresaID    string   `json:"empresa_id,omitempty"`
+	Recurso      string   `json:"recurso,omitempty"`
 }
 
 const (

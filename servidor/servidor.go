@@ -103,11 +103,31 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 	case "BUSCAR_ITINERARIO":
 		// Busca itinerários com base na origem, destino e data informados
 		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.Data)
-
+		if s.Configuracao != nil {
+			busca := s.BuscarDistribuido(req.Origem, req.Destino, req.Data)
+			itinerariosDistribuidos := make([]dominio.Itinerario, 0, len(busca.Caminhos))
+			for _, caminho := range busca.Caminhos {
+				trechos := make([]dominio.Trecho, 0, len(caminho.Trechos))
+				for _, trechoRest := range caminho.Trechos {
+					trechos = append(trechos, dominio.Trecho{
+						ID: trechoRest.TrechoID, RotaID: trechoRest.RotaID,
+						MotoristaID: trechoRest.MotoristaID, Origem: trechoRest.Origem,
+						Destino: trechoRest.Destino, Data: trechoRest.Data,
+						HorarioSaida: trechoRest.HorarioSaida, HorarioChegada: trechoRest.HorarioChegada,
+						AssentosTotais: trechoRest.AssentosDisponiveis, Valor: trechoRest.Valor,
+						EmpresaID: trechoRest.EmpresaID, Recurso: trechoRest.Recurso,
+					})
+				}
+				itinerariosDistribuidos = append(itinerariosDistribuidos, dominio.Itinerario{
+					ID: caminho.ID, Trechos: trechos,
+					ValorTotal: caminho.ValorTotal, AssentosDisponivel: caminho.AssentosDisponiveis,
+				})
+			}
+			itinerarios = itinerariosDistribuidos
+		}
 		dadosBytes, _ := json.Marshal(itinerarios)
 		resp = protocolo.Resposta{
-			Sucesso:   true,
-			Mensagem:  fmt.Sprintf("Encontrados %d itinerários.", len(itinerarios)),
+			Sucesso: true, Mensagem: fmt.Sprintf("Encontrados %d itinerários.", len(itinerarios)),
 			DadosJSON: string(dadosBytes),
 		}
 
@@ -125,11 +145,27 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
 
 	case "RESERVAR_ITINERARIO":
+		if len(req.ItensTrecho) > 0 && s.Configuracao != nil {
+			itens := make([]dominio.ItemTransacao, 0, len(req.ItensTrecho))
+			for _, item := range req.ItensTrecho {
+				itens = append(itens, dominio.ItemTransacao{
+					EmpresaID: item.EmpresaID, TrechoID: item.TrechoID, Quantidade: item.Quantidade,
+				})
+			}
+			tx, err := s.ExecutarReservaDistribuida(req.IDUsuario, itens)
+			if err != nil {
+				resp = protocolo.Resposta{Sucesso: false, Mensagem: err.Error(), DadosJSON: tx.ID}
+			} else {
+				resp = protocolo.Resposta{
+					Sucesso: true, Mensagem: "Itinerário reservado com sucesso!",
+					DadosJSON: tx.ID,
+				}
+			}
+			break
+		}
 		sucesso, msg, resID := s.Gerenciador.ReservarItinerarioComID(req.IDUsuario, req.IDsTrechos)
 		resp = protocolo.Resposta{
-			Sucesso:   sucesso,
-			Mensagem:  fmt.Sprintf("%s (ID da Reserva: %s)", msg, resID),
-			DadosJSON: resID,
+			Sucesso: sucesso, Mensagem: fmt.Sprintf("%s (ID da Reserva: %s)", msg, resID), DadosJSON: resID,
 		}
 
 	case "LISTAR_RESERVAS_PASSAGEIRO":

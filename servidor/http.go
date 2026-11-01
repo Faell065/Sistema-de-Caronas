@@ -1,8 +1,10 @@
 package servidor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"projeto_redes/configuracao"
@@ -95,7 +97,11 @@ func HandlerEmpresa(e configuracao.Empresa) http.Handler {
 	return mux
 }
 
-func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.GerenciadorDeRotas) http.Handler {
+func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.GerenciadorDeRotas, configuracoes ...configuracao.Configuracao) http.Handler {
+	chaveHMAC := ""
+	if len(configuracoes) > 0 {
+		chaveHMAC = configuracoes[0].ChaveHMAC
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/empresa", func(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +200,19 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 			return
 		}
 
+		if chaveHMAC != "" && r.Method == http.MethodPost {
+			corpo, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			if err != nil {
+				escreverJSON(w, http.StatusBadRequest, RespostaErroRest{Erro: "não foi possível ler o corpo"})
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(corpo))
+			if !ValidarAssinatura(chaveHMAC, r, corpo) {
+				escreverJSON(w, http.StatusUnauthorized, RespostaErroRest{Erro: "assinatura HMAC inválida ou vencida"})
+				return
+			}
+		}
+
 		if acao == "prepare" {
 			var tx dominio.TransacaoLocal
 			decodificador := json.NewDecoder(r.Body)
@@ -274,7 +293,7 @@ func (s *Servidor) Executar(c configuracao.Configuracao) error {
 	}
 	defer hl.Close()
 	hs := &http.Server{
-		Handler:           HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador),
+		Handler:           HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador, c),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -298,5 +317,5 @@ func (s *Servidor) atenderConexoes(listener net.Listener) error {
 }
 
 func (s *Servidor) HandlerREST(c configuracao.Configuracao) http.Handler {
-	return HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador)
+	return HandlerEmpresaComGerenciador(c.Empresa, s.Gerenciador, c)
 }

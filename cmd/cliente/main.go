@@ -1,4 +1,4 @@
-//Sistema-de-Caronas/cmd/cliente/main.go
+// Sistema-de-Caronas/cmd/cliente/main.go
 package main
 
 import (
@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"projeto_redes/dominio"
+	"projeto_redes/protocolo"
 	"strconv"
 	"strings"
 	"time"
-	"projeto_redes/protocolo"
-	"projeto_redes/dominio"
 )
 
 // Variável global para armazenar o IP e porta do servidor
@@ -204,13 +204,13 @@ func menuMotorista(reader *bufio.Reader, idMotorista string) {
 		if op == "0" {
 			break
 		}
-		switch op{
-		case "1" :
+		switch op {
+		case "1":
 			dataViagem := lerDataValida(reader, "Data da Viagem (DD/MM/AAAA): ")
 
 			fmt.Println("\n--- Configuração de Paradas ---")
 			var paradas []protocolo.ParadaRequisicao
-			
+
 			horarioAnterior := -1
 			i := 1
 			for {
@@ -273,7 +273,7 @@ func menuMotorista(reader *bufio.Reader, idMotorista string) {
 			}
 			fmt.Printf("\n[RESPOSTA] %s\n", resp.Mensagem)
 
-		case "2" :
+		case "2":
 			req := protocolo.Requisicao{TipoAcao: "LISTAR_ROTAS_MOTORISTA", IDUsuario: idMotorista}
 			resp, err := enviarRequisicao(req)
 			if err != nil {
@@ -330,8 +330,8 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 			break
 		}
 
-		switch op{
-			case "1":
+		switch op {
+		case "1":
 			origem := lerTextoValido(reader, "Origem desejada: ")
 			destino := lerTextoValido(reader, "Destino desejado: ")
 			data := lerDataValida(reader, "Data da Viagem (DD/MM/AAAA): ")
@@ -363,7 +363,7 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 			for i, itin := range itinerarios {
 				fmt.Printf("[%d] Valor Total: R$ %.2f | Vagas Disponíveis: %d\n", i+1, itin.ValorTotal, itin.AssentosDisponivel)
 				for _, t := range itin.Trechos {
-					fmt.Printf("    -> Trecho: %s para %s | Saída: %s | R$ %.2f (Motorista: %s)\n", 
+					fmt.Printf("    -> Trecho: %s para %s | Saída: %s | R$ %.2f (Motorista: %s)\n",
 						t.Origem, t.Destino, formatarHorario(t.HorarioSaida), t.Valor, t.MotoristaID)
 				}
 			}
@@ -380,14 +380,20 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 			itinerarioEscolhido := itinerarios[escolha-1]
 
 			var idsTrechos []string
+			var itensTrecho []protocolo.ItemTrechoRequisicao
 			for _, t := range itinerarioEscolhido.Trechos {
 				idsTrechos = append(idsTrechos, t.ID)
+				if t.EmpresaID != "" {
+					itensTrecho = append(itensTrecho, protocolo.ItemTrechoRequisicao{
+						EmpresaID: t.EmpresaID, TrechoID: t.ID, Quantidade: 1,
+					})
+				}
 			}
 
 			reqReserva := protocolo.Requisicao{
-				TipoAcao:   "RESERVAR_ITINERARIO",
-				IDUsuario:  idPassageiro,
-				IDsTrechos: idsTrechos,
+				TipoAcao: "RESERVAR_ITINERARIO", IDUsuario: idPassageiro,
+				IDsTrechos: idsTrechos, ItensTrecho: itensTrecho,
+				IDItinerario: itinerarioEscolhido.ID,
 			}
 
 			respReserva, err := enviarRequisicao(reqReserva)
@@ -417,7 +423,7 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 			fmt.Println("\n--- SUAS RESERVAS ATIVAS ---")
 			for _, r := range reservas {
 				fmt.Printf("\n[RESERVA ID: %v] - Valor Total: R$ %.2f\n", r["id_reserva"], r["valor_total"])
-				
+
 				// Desserializa os trechos da reserva
 				bytesTrechos, _ := json.Marshal(r["trechos"])
 				var trechos []dominio.Trecho
@@ -440,7 +446,7 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 				fmt.Println("Erro de comunicação:", err)
 				continue
 			}
-			fmt.Printf("\n[STATUS DO CANCELAMENTO] %s\n", resp.Mensagem)	
+			fmt.Printf("\n[STATUS DO CANCELAMENTO] %s\n", resp.Mensagem)
 		}
 	}
 }
@@ -448,7 +454,6 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 // ============================================================================
 // FUNÇÕES AUXILIARES DE VALIDAÇÃO E ENTRADA RECURSIVA/LOOP
 // ============================================================================
-
 func lerTextoValido(reader *bufio.Reader, mensagem string) string {
 	for {
 		fmt.Print(mensagem)
@@ -457,7 +462,7 @@ func lerTextoValido(reader *bufio.Reader, mensagem string) string {
 		if texto != "" {
 			return texto
 		}
-		fmt.Println(" Erro: O campo não pode ficar em branco. Tente novamente.")
+		fmt.Println("Erro: o campo não pode ficar vazio.")
 	}
 }
 
@@ -466,54 +471,36 @@ func lerDataValida(reader *bufio.Reader, mensagem string) string {
 		fmt.Print(mensagem)
 		entrada, _ := reader.ReadString('\n')
 		entrada = strings.TrimSpace(entrada)
-
-		t, err := time.Parse("02/01/2006", entrada)
+		data, err := time.Parse("02/01/2006", entrada)
 		if err != nil {
-			fmt.Println(" Erro: Data inválida! Use o formato DD/MM/AAAA (ex: 25/12/2026).")
+			fmt.Println("Erro: data inválida. Use DD/MM/AAAA.")
 			continue
 		}
-
-		// Zera o horário para comparar apenas o dia
 		hoje := time.Now()
-		hojeApenasDia := time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, hoje.Location())
-
-		if t.Before(hojeApenasDia) {
-			fmt.Println(" Erro: A data não pode ser inferior ao dia de hoje.")
+		hoje = time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, hoje.Location())
+		if data.Before(hoje) {
+			fmt.Println("Erro: a data não pode ser anterior a hoje.")
 			continue
 		}
-
 		return entrada
 	}
 }
 
-func lerHorarioValido(reader *bufio.Reader, mensagem string, horarioMinimo int) int {
+func lerHorarioValido(reader *bufio.Reader, mensagem string, minimo int) int {
 	for {
 		fmt.Print(mensagem)
 		entrada, _ := reader.ReadString('\n')
-		entrada = strings.TrimSpace(entrada)
-		entradaClean := strings.ReplaceAll(entrada, ":", "")
-
-		val, err := strconv.Atoi(entradaClean)
-		if err != nil {
-			fmt.Println(" Erro: Horário inválido! Digite apenas números (ex: 800 ou 08:00).")
+		entrada = strings.ReplaceAll(strings.TrimSpace(entrada), ":", "")
+		valor, err := strconv.Atoi(entrada)
+		if err != nil || valor < 0 || valor > 2359 || valor%100 >= 60 {
+			fmt.Println("Erro: horário inválido. Use HH:MM ou HHMM.")
 			continue
 		}
-
-		hora := val / 100
-		minuto := val % 100
-
-		if hora < 0 || hora > 23 || minuto < 0 || minuto > 59 {
-			fmt.Println(" Erro: Horário inexistente! A hora deve ser entre 00 e 23 e os minutos entre 00 e 59.")
+		if minimo >= 0 && valor <= minimo {
+			fmt.Printf("Erro: horário deve ser posterior a %s.\n", formatarHorario(minimo))
 			continue
 		}
-
-		if horarioMinimo >= 0 && val <= horarioMinimo {
-			fmt.Printf(" Erro: O horário de saída (%s) precisa ser posterior ao horário do trecho anterior (%s).\n", 
-				formatarHorario(val), formatarHorario(horarioMinimo))
-			continue
-		}
-
-		return val
+		return valor
 	}
 }
 
@@ -521,15 +508,12 @@ func lerIntValido(reader *bufio.Reader, mensagem string) int {
 	for {
 		fmt.Print(mensagem)
 		entrada, _ := reader.ReadString('\n')
-		entrada = strings.TrimSpace(entrada)
-
-		val, err := strconv.Atoi(entrada)
-		if err != nil || val <= 0 {
-			fmt.Println(" Erro: Digite um número inteiro maior que zero.")
+		valor, err := strconv.Atoi(strings.TrimSpace(entrada))
+		if err != nil || valor < 0 {
+			fmt.Println("Erro: digite um número inteiro não negativo.")
 			continue
 		}
-
-		return val
+		return valor
 	}
 }
 
@@ -537,21 +521,16 @@ func lerFloatValido(reader *bufio.Reader, mensagem string) float64 {
 	for {
 		fmt.Print(mensagem)
 		entrada, _ := reader.ReadString('\n')
-		entrada = strings.TrimSpace(entrada)
-		entrada = strings.ReplaceAll(entrada, ",", ".")
-
-		val, err := strconv.ParseFloat(entrada, 64)
-		if err != nil || val < 0 {
-			fmt.Println(" Erro: Digite um valor numérico válido (ex: 15.50).")
+		entrada = strings.ReplaceAll(strings.TrimSpace(entrada), ",", ".")
+		valor, err := strconv.ParseFloat(entrada, 64)
+		if err != nil || valor < 0 {
+			fmt.Println("Erro: digite um valor não negativo.")
 			continue
 		}
-
-		return val
+		return valor
 	}
 }
 
-func formatarHorario(h int) string {
-	hora := h / 100
-	minuto := h % 100
-	return fmt.Sprintf("%02d:%02d", hora, minuto)
+func formatarHorario(horario int) string {
+	return fmt.Sprintf("%02d:%02d", horario/100, horario%100)
 }
