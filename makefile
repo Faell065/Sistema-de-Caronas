@@ -34,4 +34,4 @@ docker-logs: ## Exibe os logs das três empresas
 ##@ Manutenção
 
 clean-data: ## Remove todos os arquivos JSON de dados gravados no disco
-	rm -rf dados_persistentados/*.json
+	rm -rf dados_empresas/empresa_a/* dados_empresas/empresa_b/* dados_empresas/empresa_c/*
