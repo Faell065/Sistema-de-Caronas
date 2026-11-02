@@ -17,12 +17,12 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 	g.muOperacoes.Lock()
 	g.muTransacoes.Lock()
 	g.muTrechos.Lock()
-	defer g.muTrechos.Unlock()
-	defer g.muTransacoes.Unlock()
-	defer g.muOperacoes.Unlock()
 
 	if existente, ok := g.Transacoes[tx.ID]; ok {
 		if existente.Estado == EstadoTransacaoAbortado {
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return *existente, fmt.Errorf("transação foi abortada")
 		}
 		if existente.Estado == EstadoTransacaoPreparado || existente.Estado == EstadoTransacaoCommitConfirmado || existente.Estado == EstadoTransacaoCommitPersistido {
@@ -31,9 +31,15 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 				mesmoConteudo = existente.Itens[i] == tx.Itens[i]
 			}
 			if !mesmoConteudo {
+				g.muTrechos.Unlock()
+				g.muTransacoes.Unlock()
+				g.muOperacoes.Unlock()
 				return *existente, fmt.Errorf("mesmo tx_id usado com conteúdo diferente")
 			}
 			copia := *existente
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return copia, nil
 		}
 	}
@@ -44,14 +50,23 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 
 	for _, item := range tx.Itens {
 		if item.Quantidade != 1 {
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return tx, fmt.Errorf("quantidade inválida para trecho %s", item.TrechoID)
 		}
 		trecho, existe := g.Trechos[item.TrechoID]
 		if !existe {
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return tx, fmt.Errorf("trecho %s não existe", item.TrechoID)
 		}
 		livres := trecho.AssentosTotais - trecho.AssentosOcupados - trecho.AssentosPreparados
 		if livres < item.Quantidade {
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return tx, fmt.Errorf("sem vaga disponível em %s", item.TrechoID)
 		}
 	}
@@ -62,6 +77,11 @@ func (g *GerenciadorDeRotas) PrepareReservaLocal(tx TransacaoLocal) (TransacaoLo
 	tx.Papel = "PARTICIPANTE"
 	tx.Estado = EstadoTransacaoPreparado
 	g.Transacoes[tx.ID] = &tx
+
+	// DESTRAVA TUDO ANTES DE ACESSAR O DISCO
+	g.muTrechos.Unlock()
+	g.muTransacoes.Unlock()
+	g.muOperacoes.Unlock()
 
 	if err := g.SalvarDados(); err != nil {
 		return tx, err
@@ -74,28 +94,40 @@ func (g *GerenciadorDeRotas) CommitReservaLocal(txID string) (TransacaoLocal, er
 	g.muOperacoes.Lock()
 	g.muTransacoes.Lock()
 	g.muTrechos.Lock()
-	defer g.muTrechos.Unlock()
-	defer g.muTransacoes.Unlock()
-	defer g.muOperacoes.Unlock()
 
 	tx, existe := g.Transacoes[txID]
 	if !existe {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return TransacaoLocal{}, fmt.Errorf("transação %s não existe", txID)
 	}
 	if tx.Estado == EstadoTransacaoAbortado {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return *tx, fmt.Errorf("transação já foi abortada")
 	}
 	if tx.Estado == EstadoTransacaoCommitConfirmado {
 		copia := *tx
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return copia, nil
 	}
 	if tx.Estado != EstadoTransacaoPreparado && tx.Estado != EstadoTransacaoCommitPersistido {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return *tx, fmt.Errorf("estado inválido para commit: %s", tx.Estado)
 	}
 
 	for _, item := range tx.Itens {
 		trecho, ok := g.Trechos[item.TrechoID]
 		if !ok || trecho.AssentosPreparados < item.Quantidade {
+			g.muTrechos.Unlock()
+			g.muTransacoes.Unlock()
+			g.muOperacoes.Unlock()
 			return *tx, fmt.Errorf("hold inválido no trecho %s", item.TrechoID)
 		}
 	}
@@ -108,6 +140,11 @@ func (g *GerenciadorDeRotas) CommitReservaLocal(txID string) (TransacaoLocal, er
 	tx.Estado = EstadoTransacaoCommitConfirmado
 	copia := *tx
 
+	// DESTRAVA TUDO ANTES DE ACESSAR O DISCO
+	g.muTrechos.Unlock()
+	g.muTransacoes.Unlock()
+	g.muOperacoes.Unlock()
+
 	if err := g.SalvarDados(); err != nil {
 		return copia, err
 	}
@@ -119,19 +156,25 @@ func (g *GerenciadorDeRotas) AbortReservaLocal(txID string, motivo string) (Tran
 	g.muOperacoes.Lock()
 	g.muTransacoes.Lock()
 	g.muTrechos.Lock()
-	defer g.muTrechos.Unlock()
-	defer g.muTransacoes.Unlock()
-	defer g.muOperacoes.Unlock()
 
 	tx, existe := g.Transacoes[txID]
 	if !existe {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return TransacaoLocal{}, fmt.Errorf("transação %s não existe", txID)
 	}
 	if tx.Estado == EstadoTransacaoAbortado {
 		copia := *tx
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return copia, nil
 	}
 	if tx.Estado == EstadoTransacaoCommitConfirmado {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return *tx, fmt.Errorf("transação já confirmada não pode ser abortada")
 	}
 
@@ -143,6 +186,11 @@ func (g *GerenciadorDeRotas) AbortReservaLocal(txID string, motivo string) (Tran
 	tx.Estado = EstadoTransacaoAbortado
 	tx.Motivo = motivo
 	copia := *tx
+
+	// DESTRAVA TUDO ANTES DE ACESSAR O DISCO
+	g.muTrechos.Unlock()
+	g.muTransacoes.Unlock()
+	g.muOperacoes.Unlock()
 
 	if err := g.SalvarDados(); err != nil {
 		return copia, err
@@ -166,16 +214,20 @@ func (g *GerenciadorDeRotas) CancelarReservaLocal(txID string) (TransacaoLocal, 
 	g.muOperacoes.Lock()
 	g.muTransacoes.Lock()
 	g.muTrechos.Lock()
-	defer g.muTrechos.Unlock()
-	defer g.muTransacoes.Unlock()
-	defer g.muOperacoes.Unlock()
 
 	tx, existe := g.Transacoes[txID]
 	if !existe {
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
 		return TransacaoLocal{}, fmt.Errorf("transação %s não existe", txID)
 	}
 	if tx.Estado == EstadoTransacaoCancelado {
-		return *tx, nil
+		copia := *tx
+		g.muTrechos.Unlock()
+		g.muTransacoes.Unlock()
+		g.muOperacoes.Unlock()
+		return copia, nil
 	}
 
 	for _, item := range tx.Itens {
@@ -185,6 +237,11 @@ func (g *GerenciadorDeRotas) CancelarReservaLocal(txID string) (TransacaoLocal, 
 	}
 	tx.Estado = EstadoTransacaoCancelado
 	copia := *tx
+
+	// DESTRAVA TUDO ANTES DE ACESSAR O DISCO
+	g.muTrechos.Unlock()
+	g.muTransacoes.Unlock()
+	g.muOperacoes.Unlock()
 
 	_ = g.SalvarDados()
 	return copia, nil

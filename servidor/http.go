@@ -191,8 +191,13 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 			})
 		}
 
-		// Adiciona também trechos avulsos daquela data para que empresas parceiras possam compor grafos DFS distribuídos
+		// Adiciona também trechos avulsos daquela data, ignorando os que já formaram itinerários
 		for _, t := range g.Trechos {
+			// NOVA LINHA (impede a duplicação do Problema 1)
+			if trechosAdicionados[t.ID] {
+				continue 
+			}
+			
 			livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
 			if t.Data == req.Data && livres > 0 {
 				tRest := trechoRest(e, *t)
