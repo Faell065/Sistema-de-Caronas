@@ -140,7 +140,38 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "CANCELAR_ROTA":
-		sucesso, msg := s.Gerenciador.CancelarRotaMotorista(req.IDUsuario, req.IDRota)
+		sucesso, msg, afetadas := s.Gerenciador.CancelarRotaMotorista(req.IDUsuario, req.IDRota)
+		if sucesso && s.Configuracao != nil && len(afetadas) > 0 {
+			cliente := NovoClienteREST(s.Configuracao.Empresa.ID, s.Configuracao.ChaveHMAC, 1500*time.Millisecond)
+			urls := make(map[string]string)
+			for _, par := range s.Configuracao.Pares {
+				urls[par.ID] = par.URL
+			}
+			urls[s.Configuracao.Empresa.ID] = s.Configuracao.Empresa.URL
+
+			for _, af := range afetadas {
+				if af.CoordenadorID == s.Configuracao.Empresa.ID {
+					// Nós somos o coordenador! O motorista era nosso mesmo.
+					// Deletamos a reserva do passageiro local e mandamos as outras empresas liberarem a vaga.
+					if itens, existe := s.Gerenciador.RemoverReservaForcada(af.TxID); existe {
+						for _, item := range itens {
+							if item.EmpresaID == s.Configuracao.Empresa.ID {
+								_, _ = s.Gerenciador.CancelarReservaLocal(af.TxID)
+							} else if url, ok := urls[item.EmpresaID]; ok {
+								_, _, _ = cliente.ChamarComRepeticao(http.MethodPost,
+									strings.TrimRight(url, "/")+"/api/v1/transacoes/"+af.TxID+"/cancelar",
+									af.TxID, DecisaoTransacaoRest{ID: af.TxID}, 3)
+							}
+						}
+					}
+				} else if url, ok := urls[af.CoordenadorID]; ok {
+					// O Coordenador da reserva é outro servidor! Avisamos ele para forçar o cancelamento em cascata.
+					_, _, _ = cliente.ChamarComRepeticao(http.MethodPost,
+						strings.TrimRight(url, "/")+"/api/v1/transacoes/"+af.TxID+"/forcar_cancelamento",
+						af.TxID, DecisaoTransacaoRest{ID: af.TxID}, 3)
+				}
+			}
+		}
 		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
 
 	case "RESERVAR_ITINERARIO":

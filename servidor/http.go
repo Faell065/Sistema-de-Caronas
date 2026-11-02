@@ -342,6 +342,26 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 				return
 			}
 			escreverJSON(w, http.StatusOK, resultado)
+			case "forcar_cancelamento":
+			if len(configuracoes) > 0 {
+				if itens, existe := g.RemoverReservaForcada(txID); existe {
+					for _, item := range itens {
+						if item.EmpresaID == e.ID {
+							_, _ = g.CancelarReservaLocal(txID)
+							continue
+						}
+						for _, par := range configuracoes[0].Pares {
+							if par.ID == item.EmpresaID {
+								cliente := NovoClienteREST(e.ID, chaveHMAC, 1500*time.Millisecond)
+								_, _, _ = cliente.ChamarComRepeticao(http.MethodPost,
+									strings.TrimRight(par.URL, "/")+"/api/v1/transacoes/"+txID+"/cancelar",
+									txID, DecisaoTransacaoRest{ID: txID}, 3)
+							}
+						}
+					}
+				}
+			}
+			escreverJSON(w, http.StatusOK, map[string]string{"status": "reserva distribuída forçadamente cancelada"})
 		default:
 			escreverJSON(w, http.StatusNotFound, RespostaErroRest{Erro: "ação de transação inválida"})
 		}

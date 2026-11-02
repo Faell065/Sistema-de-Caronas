@@ -262,7 +262,12 @@ func (g *GerenciadorDeRotas) ListarRotasMotorista(motoristaID string) map[string
 	return rotas
 }
 
-func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (bool, string) {
+type TxAfetada struct {
+	TxID          string
+	CoordenadorID string
+}
+
+func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (bool, string, []TxAfetada) {
 	g.muOperacoes.Lock()
 	g.muTrechos.Lock()
 
@@ -277,12 +282,38 @@ func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (
 	}
 	g.muTrechos.Unlock()
 
+	var txAfetadas []TxAfetada
 	if encontrou {
+		// Identifica transações distribuídas ou locais que usavam a rota apagada
+		g.muTransacoes.Lock()
+		for _, tx := range g.Transacoes {
+			temRemovido := false
+			for _, item := range tx.Itens {
+				if trechosRemovidos[item.TrechoID] {
+					temRemovido = true
+					break
+				}
+			}
+			if temRemovido && tx.Estado != EstadoTransacaoCancelado && tx.Estado != EstadoTransacaoAbortado {
+				txAfetadas = append(txAfetadas, TxAfetada{
+					TxID:          tx.ID,
+					CoordenadorID: tx.CoordenadorID,
+				})
+				tx.Estado = EstadoTransacaoCancelado
+			}
+		}
+		g.muTransacoes.Unlock()
+
+		// Remove das reservas locais, se houver
 		g.muReservas.Lock()
 		for resID, res := range g.Reservas {
 			remover := false
 			for _, idT := range res.IDsTrechos {
-				if trechosRemovidos[idT] {
+				idLocal := idT
+				if barra := strings.LastIndex(idT, "/"); barra >= 0 {
+					idLocal = idT[barra+1:]
+				}
+				if trechosRemovidos[idLocal] {
 					remover = true
 					break
 				}
@@ -296,10 +327,25 @@ func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (
 	g.muOperacoes.Unlock()
 
 	if !encontrou {
-		return false, "Rota não encontrada ou não pertence a este motorista."
+		return false, "Rota não encontrada ou não pertence a este motorista.", nil
 	}
 	_ = g.SalvarDados()
-	return true, "Rota cancelada e removida com sucesso!"
+	return true, "Rota cancelada e removida com sucesso!", txAfetadas
+}
+
+// RemoverReservaForcada exclui a reserva ignorando a validação do ID do Passageiro (usado por chamadas do sistema)
+func (g *GerenciadorDeRotas) RemoverReservaForcada(reservaID string) ([]ItemTransacao, bool) {
+	g.muReservas.Lock()
+	res, existe := g.Reservas[reservaID]
+	if !existe {
+		g.muReservas.Unlock()
+		return nil, false
+	}
+	itens := append([]ItemTransacao(nil), res.Itens...)
+	delete(g.Reservas, reservaID)
+	g.muReservas.Unlock()
+	_ = g.SalvarDados()
+	return itens, true
 }
 
 func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTrechos []string) (bool, string, string) {
