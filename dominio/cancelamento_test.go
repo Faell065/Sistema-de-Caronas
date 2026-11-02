@@ -9,7 +9,8 @@ func TestReservaDistribuidaPersisteItensParaCancelamento(t *testing.T) {
 		{EmpresaID: "empresa_a", TrechoID: "ta", Quantidade: 1},
 		{EmpresaID: "empresa_b", TrechoID: "tb", Quantidade: 1},
 	}
-	if err := g.CriarReservaDistribuida("res-1", "empresa_a", "p1", itens); err != nil {
+	// Adicionados 'nil' e '0.0' nos dois últimos parâmetros
+	if err := g.CriarReservaDistribuida("res-1", "empresa_a", "p1", itens, nil, 0.0); err != nil {
 		t.Fatal(err)
 	}
 

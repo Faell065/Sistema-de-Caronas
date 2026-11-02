@@ -1,7 +1,4 @@
-// Sistema-de-Caronas/dominio/trecho.go
 package dominio
-
-//apenas os modelos de dados
 
 type Trecho struct {
 	ID                 string  `json:"id"`
@@ -50,6 +47,7 @@ type TransacaoLocal struct {
 	Itens                 []ItemTransacao `json:"itens"`
 	Motivo                string          `json:"motivo,omitempty"`
 	SequenciaProprietario uint64          `json:"sequencia_proprietario,omitempty"`
+	CriadoEm              int64           `json:"criado_em,omitempty"`
 }
 
 type EstadoParticipante struct {
@@ -69,27 +67,24 @@ type TransacaoCoordenador struct {
 	Motivo         string               `json:"motivo,omitempty"`
 }
 
-// Rota é a viagem completa de um motorista, composta por vários trechos
 type Rota struct {
 	ID          string
-	Trechos     []Trecho // lista dinamica
+	Trechos     []Trecho
 	MotoristaID string
 }
 
-// Itinerario representa o caminho encontrado para o passageiro
 type Itinerario struct {
 	ID                 string   `json:"id"`
 	Trechos            []Trecho `json:"trechos"`
 	ValorTotal         float64  `json:"valor_total"`
-	AssentosDisponivel int      `json:"assentos_disponivel"` // Mínimo de vagas entre os trechos do itinerario
+	AssentosDisponivel int      `json:"assentos_disponivel"`
 }
 
-// Usuario representa qualquer pessoa cadastrada (motorista ou passageiro)
 type Usuario struct {
-	ID    string `json:"id"`    // ID único gerado automaticamente (ex: joao_4892)
-	Nome  string `json:"nome"`  // Nome informado pelo usuário
-	Senha string `json:"senha"` // Senha para login futuro
-	Tipo  string `json:"tipo"`  // "motorista" ou "passageiro"
+	ID    string `json:"id"`
+	Nome  string `json:"nome"`
+	Senha string `json:"senha"`
+	Tipo  string `json:"tipo"`
 }
 
 type Reserva struct {
@@ -100,6 +95,8 @@ type Reserva struct {
 	EmpresaID    string          `json:"empresa_id,omitempty"`
 	Recurso      string          `json:"recurso,omitempty"`
 	Itens        []ItemTransacao `json:"itens,omitempty"`
+	Trechos      []Trecho        `json:"trechos,omitempty"`
+	ValorTotal   float64         `json:"valor_total,omitempty"`
 }
 
 const (

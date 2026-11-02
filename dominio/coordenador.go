@@ -87,17 +87,21 @@ func (g *GerenciadorDeRotas) ConsultarTransacaoCoordenador(txID string) (Transac
 	return copia, true
 }
 
-func (g *GerenciadorDeRotas) CriarReservaDistribuida(txID, empresaID, passageiroID string, itens []ItemTransacao) error {
+func (g *GerenciadorDeRotas) CriarReservaDistribuida(txID, empresaID, passageiroID string, itens []ItemTransacao, trechos []Trecho, valorTotal float64) error {
 	g.muReservas.Lock()
 	ids := make([]string, 0, len(itens))
 	for _, item := range itens {
 		ids = append(ids, item.EmpresaID+"/"+item.TrechoID)
 	}
 	g.Reservas[txID] = &Reserva{
-		ID: txID, PassageiroID: passageiroID,
-		IDsTrechos: ids, Itens: append([]ItemTransacao(nil), itens...),
-		EmpresaID: empresaID,
-		Data:      "",
+		ID:           txID,
+		PassageiroID: passageiroID,
+		IDsTrechos:   ids,
+		Itens:        append([]ItemTransacao(nil), itens...),
+		EmpresaID:    empresaID,
+		Data:         time.Now().Format("02/01/2006"),
+		Trechos:      append([]Trecho(nil), trechos...),
+		ValorTotal:   valorTotal,
 	}
 	g.muReservas.Unlock()
 	return g.SalvarDados()

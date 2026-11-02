@@ -21,7 +21,7 @@ func TestCoordenadorReservaSomenteLocal(t *testing.T) {
 
 	tx, err := s.ExecutarReservaDistribuida("passageiro_a", []dominio.ItemTransacao{{
 		EmpresaID: "empresa_a", TrechoID: "ta", Quantidade: 1,
-	}})
+	}}, nil, 0.0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestCoordenadorAbortaHoldLocalQuandoParticipanteRemotoRecusa(t *testing.T) 
 		{EmpresaID: "empresa_a", TrechoID: "ta", Quantidade: 1},
 		{EmpresaID: "empresa_b", TrechoID: "tb", Quantidade: 1},
 	}
-	tx, err := s.ExecutarReservaDistribuida("passageiro_a", itens)
+	tx, err := s.ExecutarReservaDistribuida("passageiro_a", itens, nil, 0.0)
 	if err == nil {
 		t.Fatal("esperada recusa do participante remoto")
 	}
@@ -87,7 +87,7 @@ func TestCoordenadorIndisponibilidadeRemotaAbortaEChegaAoEstadoPersistido(t *tes
 	tx, err := s.ExecutarReservaDistribuida("passageiro_a", []dominio.ItemTransacao{
 		{EmpresaID: "empresa_a", TrechoID: "ta", Quantidade: 1},
 		{EmpresaID: "empresa_b", TrechoID: "tb", Quantidade: 1},
-	})
+	}, nil, 0.0)
 	if err == nil {
 		t.Fatal("esperada indisponibilidade do participante remoto")
 	}

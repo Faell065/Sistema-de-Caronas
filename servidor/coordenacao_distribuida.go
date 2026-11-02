@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []dominio.ItemTransacao) (dominio.TransacaoCoordenador, error) {
+func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []dominio.ItemTransacao, trechos []dominio.Trecho, valorTotal float64) (dominio.TransacaoCoordenador, error) {
 	if s.Configuracao == nil {
 		return dominio.TransacaoCoordenador{}, fmt.Errorf("configuração do servidor indisponível")
 	}
@@ -117,7 +117,7 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 	}
 
 	_ = s.Gerenciador.SetEstadoCoordenador(txID, dominio.EstadoCoordenadorConfirmado)
-	if err := s.Gerenciador.CriarReservaDistribuida(txID, s.Configuracao.Empresa.ID, passageiroID, itens); err != nil {
+	if err := s.Gerenciador.CriarReservaDistribuida(txID, s.Configuracao.Empresa.ID, passageiroID, itens, trechos, valorTotal); err != nil {
 		return s.estadoCoordenador(txID), err
 	}
 	return s.estadoCoordenador(txID), nil
@@ -152,7 +152,6 @@ func (s *Servidor) proximoLamport() uint64 {
 	return s.Lamport
 }
 
-// ParesParaSlice adapta temporariamente os pares sem alterar configuracao.Empresa.
 func (s *Servidor) ParesParaSlice() []struct{ ID, Nome, URL string } {
 	if s.Configuracao == nil {
 		return nil

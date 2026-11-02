@@ -383,16 +383,25 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 			var itensTrecho []protocolo.ItemTrechoRequisicao
 			for _, t := range itinerarioEscolhido.Trechos {
 				idsTrechos = append(idsTrechos, t.ID)
-				if t.EmpresaID != "" {
-					itensTrecho = append(itensTrecho, protocolo.ItemTrechoRequisicao{
-						EmpresaID: t.EmpresaID, TrechoID: t.ID, Quantidade: 1,
-					})
-				}
+				itensTrecho = append(itensTrecho, protocolo.ItemTrechoRequisicao{
+					EmpresaID:      t.EmpresaID,
+					TrechoID:       t.ID,
+					Quantidade:     1,
+					Origem:         t.Origem,
+					Destino:        t.Destino,
+					Data:           t.Data,
+					HorarioSaida:   t.HorarioSaida,
+					HorarioChegada: t.HorarioChegada,
+					Valor:          t.Valor,
+					MotoristaID:    t.MotoristaID,
+				})
 			}
 
 			reqReserva := protocolo.Requisicao{
-				TipoAcao: "RESERVAR_ITINERARIO", IDUsuario: idPassageiro,
-				IDsTrechos: idsTrechos, ItensTrecho: itensTrecho,
+				TipoAcao:     "RESERVAR_ITINERARIO",
+				IDUsuario:    idPassageiro,
+				IDsTrechos:   idsTrechos,
+				ItensTrecho:  itensTrecho,
 				IDItinerario: itinerarioEscolhido.ID,
 			}
 

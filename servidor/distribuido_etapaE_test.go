@@ -39,8 +39,8 @@ func TestDisputaUltimaVagaEntreDoisCoordenadores(t *testing.T) {
 	itens1 := []dominio.ItemTransacao{{EmpresaID: "empresa_a", TrechoID: "ultima", Quantidade: 1}}
 	itens2 := append([]dominio.ItemTransacao(nil), itens1...)
 
-	tx1, err1 := coord1.ExecutarReservaDistribuida("p1", itens1)
-	tx2, err2 := coord2.ExecutarReservaDistribuida("p2", itens2)
+	tx1, err1 := coord1.ExecutarReservaDistribuida("p1", itens1, nil, 0.0)
+	tx2, err2 := coord2.ExecutarReservaDistribuida("p2", itens2, nil, 0.0)
 
 	if err1 == nil && err2 == nil {
 		t.Fatal("duas coordenadoras confirmaram a mesma última vaga")

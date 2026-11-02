@@ -1,4 +1,3 @@
-// Sistema-de-Caronas/servidor/servidor.go
 package servidor
 
 import (
@@ -24,16 +23,13 @@ type Servidor struct {
 	Lamport   uint64
 }
 
-// Novo Servidor cria um novo servidor com um gerenciador de rotas
 func NovoServidor() *Servidor {
 	Gerenciador := dominio.NovoGerenciador()
 	return &Servidor{Gerenciador: Gerenciador}
 }
 
-// Função para iniciar o servidor e escutar por conexões
 func (s *Servidor) Iniciar(porta string) {
-	// Inicia o listener TCP na porta especificada
-	listener, err := net.Listen("tcp", ":"+porta) // anteriormente estava "localhost:"+porta, mas para aceitar conexões externas, usamos ":"+porta
+	listener, err := net.Listen("tcp", ":"+porta)
 	if err != nil {
 		fmt.Printf("Erro ao iniciar o servidor na porta %s: %v\n", porta, err)
 		return
@@ -41,29 +37,25 @@ func (s *Servidor) Iniciar(porta string) {
 	defer listener.Close()
 	fmt.Printf("Servidor TCP rodando e escutando na porta %s\n", porta)
 	for {
-		// Aceita novas conexões de clientes (trava aqui até alguém conectar)
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println("Erro ao aceitar conexão:", err)
 			continue
 		}
-		// Cria uma goroutine para lidar com a conexão do cliente de forma assincrona/concorrente
 		go s.atenderCliente(conn)
 	}
 }
 
-// Metodo da classe Servidor para atender a conexão de um cliente (gerencia a conversa individual com cada um)
 func (s *Servidor) atenderCliente(conn net.Conn) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
-	mensagemBytes, err := reader.ReadBytes('\n') // lê até o final da linha
+	mensagemBytes, err := reader.ReadBytes('\n')
 	if err != nil {
 		fmt.Println("Erro ao ler mensagem do cliente:", err)
 		return
 	}
 
-	// Desserializa o JSON recebido para a struct Requisicao do protocolo
 	var req protocolo.Requisicao
 	err = json.Unmarshal(mensagemBytes, &req)
 	if err != nil {
@@ -73,13 +65,11 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 	}
 	fmt.Printf("[REDE] Ação recebida: %s do usuário: %s\n", req.TipoAcao, req.IDUsuario)
 
-	// Processa a regra de negócios com base na ação solicitada
 	var resp protocolo.Resposta
 
 	switch req.TipoAcao {
 
 	case "CADASTRAR_USUARIO":
-		// Chama o gerenciador para criar o usuário e gerar o ID único
 		idGerado, err := s.Gerenciador.CadastrarUsuario(req.Nome, req.Senha, req.Tipo)
 		if err != nil {
 			resp = protocolo.Resposta{Sucesso: false, Mensagem: err.Error()}
@@ -87,12 +77,11 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 			resp = protocolo.Resposta{
 				Sucesso:   true,
 				Mensagem:  fmt.Sprintf("Usuário cadastrado com sucesso! Seu ID gerado é: %s", idGerado),
-				DadosJSON: idGerado, // Retorna o ID gerado para que o cliente possa guardá-lo
+				DadosJSON: idGerado,
 			}
 		}
 
 	case "LOGIN":
-		// Valida as credenciais e o tipo de conta no gerenciador
 		valido, usuario := s.Gerenciador.Autenticar(req.IDUsuario, req.Senha, req.TipoUsuario)
 		if !valido {
 			resp = protocolo.Resposta{Sucesso: false, Mensagem: "ID, senha incorretos ou tipo de conta incompatível."}
@@ -104,7 +93,6 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		}
 
 	case "BUSCAR_ITINERARIO":
-		// Busca itinerários com base na origem, destino e data informados
 		itinerarios := s.Gerenciador.BuscarItinerarios(req.Origem, req.Destino, req.Data)
 		if s.Configuracao != nil {
 			busca := s.BuscarDistribuido(req.Origem, req.Destino, req.Data)
@@ -158,12 +146,28 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 	case "RESERVAR_ITINERARIO":
 		if len(req.ItensTrecho) > 0 && s.Configuracao != nil {
 			itens := make([]dominio.ItemTransacao, 0, len(req.ItensTrecho))
+			trechosDet := make([]dominio.Trecho, 0, len(req.ItensTrecho))
+			var valorTotal float64
+
 			for _, item := range req.ItensTrecho {
 				itens = append(itens, dominio.ItemTransacao{
 					EmpresaID: item.EmpresaID, TrechoID: item.TrechoID, Quantidade: item.Quantidade,
 				})
+				trechosDet = append(trechosDet, dominio.Trecho{
+					ID:             item.TrechoID,
+					EmpresaID:      item.EmpresaID,
+					Origem:         item.Origem,
+					Destino:        item.Destino,
+					Data:           item.Data,
+					HorarioSaida:   item.HorarioSaida,
+					HorarioChegada: item.HorarioChegada,
+					Valor:          item.Valor,
+					MotoristaID:    item.MotoristaID,
+				})
+				valorTotal += item.Valor
 			}
-			tx, err := s.ExecutarReservaDistribuida(req.IDUsuario, itens)
+
+			tx, err := s.ExecutarReservaDistribuida(req.IDUsuario, itens, trechosDet, valorTotal)
 			if err != nil {
 				resp = protocolo.Resposta{Sucesso: false, Mensagem: err.Error(), DadosJSON: tx.ID}
 			} else {
@@ -213,7 +217,6 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		resp = protocolo.Resposta{Sucesso: sucesso, Mensagem: msg}
 
 	case "CADASTRAR_ROTA":
-		// Valida se o ID do motorista foi enviado e existe
 		if req.IDUsuario == "" {
 			resp = protocolo.Resposta{Sucesso: false, Mensagem: "Usuário não autenticado."}
 			break
@@ -248,13 +251,10 @@ func (s *Servidor) atenderCliente(conn net.Conn) {
 		resp = protocolo.Resposta{Sucesso: false, Mensagem: "Ação desconhecida"}
 	}
 
-	// Envia a resposta de volta ao cliente via socket
 	s.enviarResposta(conn, resp)
 }
 
-// enviarResposta serializa a resposta em JSON e envia pela rede com uma quebra de linha delimitadora
 func (s *Servidor) enviarResposta(conn net.Conn, resp protocolo.Resposta) {
 	bytesResp, _ := json.Marshal(resp)
-	// Adicionamos '\n' no final para o cliente saber onde a mensagem termina
 	conn.Write(append(bytesResp, '\n'))
 }

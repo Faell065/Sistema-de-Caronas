@@ -68,6 +68,16 @@ func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 		fmt.Printf("[RECUPERAÇÃO] Transação coordenadora deve ser retomada: %s estado=%s\n", tx.ID, tx.Estado)
 	}
 	go servidor.RecuperarTransacoes()
+
+	// Goroutine de limpeza periódica de transações preparadas expiradas (TTL 3 minutos)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			servidor.Gerenciador.LimparTransacoesExpiradas(180)
+		}
+	}()
+
 	return servidor
 }
 
@@ -164,11 +174,15 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 		}
 
 		itinerarios := g.BuscarItinerarios(req.Origem, req.Destino, req.Data)
-		resposta := RespostaBuscaRest{EmpresaID: e.ID, Itinerarios: make([]ItinerarioRest, 0, len(itinerarios))}
+		resposta := RespostaBuscaRest{EmpresaID: e.ID, Itinerarios: make([]ItinerarioRest, 0)}
+
+		trechosAdicionados := make(map[string]bool)
 		for _, itinerario := range itinerarios {
 			trechos := make([]TrechoRest, 0, len(itinerario.Trechos))
 			for _, t := range itinerario.Trechos {
-				trechos = append(trechos, trechoRest(e, t))
+				tRest := trechoRest(e, t)
+				trechos = append(trechos, tRest)
+				trechosAdicionados[t.ID] = true
 			}
 			resposta.Itinerarios = append(resposta.Itinerarios, ItinerarioRest{
 				ID: itinerario.ID, Trechos: trechos,
@@ -176,6 +190,21 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 				AssentosDisponiveis: itinerario.AssentosDisponivel,
 			})
 		}
+
+		// Adiciona também trechos avulsos daquela data para que empresas parceiras possam compor grafos DFS distribuídos
+		for _, t := range g.Trechos {
+			livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
+			if t.Data == req.Data && livres > 0 {
+				tRest := trechoRest(e, *t)
+				resposta.Itinerarios = append(resposta.Itinerarios, ItinerarioRest{
+					ID:                  fmt.Sprintf("itin_seg_%s", t.ID),
+					Trechos:             []TrechoRest{tRest},
+					ValorTotal:          t.Valor,
+					AssentosDisponiveis: livres,
+				})
+			}
+		}
+
 		escreverJSON(w, http.StatusOK, resposta)
 	})
 
@@ -316,7 +345,6 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 	return mux
 }
 
-// Executar abre as duas portas antes de começar a atender.
 func (s *Servidor) Executar(c configuracao.Configuracao) error {
 	if err := c.Validar(); err != nil {
 		return err

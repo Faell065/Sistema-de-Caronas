@@ -1,4 +1,3 @@
-// Sistema-de-Caronas/dominio/gerenciador.go
 package dominio
 
 import (
@@ -12,7 +11,6 @@ import (
 
 func CriarRota(id string, motoristaID string, paradas []string, assentos int) Rota {
 	var trechos []Trecho
-
 	for i := 0; i < len(paradas)-1; i++ {
 		novoTrecho := Trecho{
 			Origem:           paradas[i],
@@ -37,8 +35,6 @@ type GerenciadorDeRotas struct {
 	muReservas   sync.RWMutex
 	muTransacoes sync.RWMutex
 
-	// Operações locais que alteram trechos e reservas juntas usam esta trava.
-	// Ela não deve ser mantida enquanto houver espera de rede em etapas futuras.
 	muOperacoes sync.Mutex
 
 	Trechos               map[string]*Trecho
@@ -66,10 +62,6 @@ func NovoGerenciador() *GerenciadorDeRotas {
 	return NovoGerenciadorComDiretorio("dados")
 }
 
-// METODOS GERENCIADOR DE ROTAS
-
-// USUARIO
-// CadastrarUsuario gera um ID único (nome + números aleatórios) e salva o usuário
 func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string, error) {
 	g.muUsuarios.Lock()
 
@@ -96,9 +88,6 @@ func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string,
 	return idGerado, nil
 }
 
-// USUARIO
-
-// Autenticar valida se o ID, a senha e o TIPO conferem
 func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha, tipo string) (bool, *Usuario) {
 	g.muUsuarios.RLock()
 	defer g.muUsuarios.RUnlock()
@@ -108,7 +97,6 @@ func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha, tipo string) (bool, *U
 		return false, nil
 	}
 
-	// Bloqueia se a senha estiver errada ou se o tipo de usuário for diferente do menu acessado
 	if usuario.Senha != senha || usuario.Tipo != tipo {
 		return false, nil
 	}
@@ -117,12 +105,12 @@ func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha, tipo string) (bool, *U
 }
 
 func (g *GerenciadorDeRotas) AdicionarTrechos(novosTrechos []Trecho) {
-	g.muTrechos.Lock() // trava o mutex para escrita, garantindo que nenhuma outra goroutine possa acessar os dados enquanto estou escrevendo
+	g.muTrechos.Lock()
 	defer g.muTrechos.Unlock()
 
 	for _, t := range novosTrechos {
-		trechoCopy := t               // cria uma cópia do trecho, para o mapa não guardar o mesmo endereço de memoria
-		g.Trechos[t.ID] = &trechoCopy // adiciona o trecho ao mapa, usando o ID como chave e o ponteiro para a cópia como valor
+		trechoCopy := t
+		g.Trechos[t.ID] = &trechoCopy
 	}
 }
 
@@ -138,17 +126,10 @@ func (g *GerenciadorDeRotas) ObterTrecho(id string) (*Trecho, bool) {
 	return &copiado, true
 }
 
-// ITNERARIO
-// ITNERARIO
-// ITNERARIO
-// Itinerario é uma combinação de 1 ou mais trechos que levam da Origem ao Destino
-
-// BuscarItinerarios encontra caminhos (diretos ou múltiplos trechos) entre origem e destino para uma data
 func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []Itinerario {
 	g.muTrechos.RLock()
 	defer g.muTrechos.RUnlock()
 
-	// Filtra apenas trechos da data correta
 	var trechosValidos []Trecho
 	for _, t := range g.Trechos {
 		livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
@@ -158,12 +139,9 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 	}
 
 	var itinerariosEncontrados []Itinerario
-
-	// Função recursiva interna para buscar caminhos (DFS)
 	var dfs func(cidadeAtual string, caminhoAtual []Trecho, visitados map[string]bool)
 
 	dfs = func(cidadeAtual string, caminhoAtual []Trecho, visitados map[string]bool) {
-		// Se chegamos ao destino desejado, salvamos o itinerário válido
 		if cidadeAtual == destino && len(caminhoAtual) > 0 {
 			var valorTotal float64
 			minAssentos := 999999
@@ -176,7 +154,6 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 				}
 			}
 
-			// Gera um ID único para o itinerário composto
 			itinerarioID := fmt.Sprintf("itin_%d", time.Now().UnixNano())
 
 			itinerariosEncontrados = append(itinerariosEncontrados, Itinerario{
@@ -188,13 +165,10 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 			return
 		}
 
-		// Procura o próximo trecho a partir da cidade atual
 		for _, t := range trechosValidos {
 			if t.Origem == cidadeAtual && !visitados[t.ID] {
-				// Evita ciclos no grafo
 				visitados[t.ID] = true
 
-				// O horário de saída do próximo trecho deve ser posterior ou igual à chegada do trecho anterior (se houver)
 				if len(caminhoAtual) > 0 {
 					trechoAnterior := caminhoAtual[len(caminhoAtual)-1]
 					if t.HorarioSaida < trechoAnterior.HorarioChegada {
@@ -204,22 +178,17 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 				}
 
 				dfs(t.Destino, append(caminhoAtual, t), visitados)
-
-				// Backtrack
 				visitados[t.ID] = false
 			}
 		}
 	}
 
-	// Inicia a busca recursiva a partir da origem informada
 	visitadosMap := make(map[string]bool)
 	dfs(origem, []Trecho{}, visitadosMap)
 
 	return itinerariosEncontrados
 }
 
-// SUBSTITUIDO POR RESERVARCOMID
-// ReservarItinerario tenta reservar assentos em todos os trechos de um itinerário de forma atômica
 func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, string) {
 	g.muOperacoes.Lock()
 	defer g.muOperacoes.Unlock()
@@ -243,24 +212,14 @@ func (g *GerenciadorDeRotas) ReservarItinerario(idsTrechos []string) (bool, stri
 	return true, "Itinerario reservado com sucesso!"
 }
 
-// ITNERARIO
-// ITNERARIO
-// ITNERARIO
-
-// ParadaRota representa cada cidade no caminho e as condições daquele trecho específico que se inicia nela
 type ParadaRota struct {
 	Cidade         string  `json:"cidade"`
 	HorarioSaida   int     `json:"horario_saida"`
-	AssentosTotais int     `json:"assentos_totais"` // Assentos específicos para o trecho que sai daqui
-	Valor          float64 `json:"valor"`           // Valor para o trecho que sai daqui
+	AssentosTotais int     `json:"assentos_totais"`
+	Valor          float64 `json:"valor"`
 }
 
-// CadastrarRotaCompleta processa uma rota contínua e a fragmenta em trechos atômicos
-func (g *GerenciadorDeRotas) CadastrarRotaCompleta(
-	motoristaID string,
-	data string,
-	paradas []ParadaRota, // Sequência de cidades e os dados de seus respectivos trechos de saída
-) []string {
+func (g *GerenciadorDeRotas) CadastrarRotaCompleta(motoristaID string, data string, paradas []ParadaRota) []string {
 	g.muOperacoes.Lock()
 	var idsTrechosGerados []string
 	rotaID := fmt.Sprintf("rota_%d", time.Now().UnixNano())
@@ -290,9 +249,6 @@ func (g *GerenciadorDeRotas) CadastrarRotaCompleta(
 	return idsTrechosGerados
 }
 
-// --- MÉTODOS DO MOTORISTA ---
-
-// ListarRotasMotorista retorna todas as rotas ativas agrupadas criadas por um motorista
 func (g *GerenciadorDeRotas) ListarRotasMotorista(motoristaID string) map[string][]Trecho {
 	g.muTrechos.RLock()
 	defer g.muTrechos.RUnlock()
@@ -306,19 +262,37 @@ func (g *GerenciadorDeRotas) ListarRotasMotorista(motoristaID string) map[string
 	return rotas
 }
 
-// CancelarRotaMotorista remove todos os trechos associados a uma rota
 func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (bool, string) {
 	g.muOperacoes.Lock()
-
 	g.muTrechos.Lock()
+
+	trechosRemovidos := make(map[string]bool)
 	encontrou := false
 	for id, t := range g.Trechos {
 		if t.RotaID == rotaID && t.MotoristaID == motoristaID {
 			delete(g.Trechos, id)
+			trechosRemovidos[id] = true
 			encontrou = true
 		}
 	}
 	g.muTrechos.Unlock()
+
+	if encontrou {
+		g.muReservas.Lock()
+		for resID, res := range g.Reservas {
+			remover := false
+			for _, idT := range res.IDsTrechos {
+				if trechosRemovidos[idT] {
+					remover = true
+					break
+				}
+			}
+			if remover {
+				delete(g.Reservas, resID)
+			}
+		}
+		g.muReservas.Unlock()
+	}
 	g.muOperacoes.Unlock()
 
 	if !encontrou {
@@ -328,13 +302,13 @@ func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (
 	return true, "Rota cancelada e removida com sucesso!"
 }
 
-// --- MÉTODOS DO PASSAGEIRO ---
-
-// ReservarItinerario atômico com registro de ID da Reserva
 func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTrechos []string) (bool, string, string) {
 	g.muOperacoes.Lock()
-
 	g.muTrechos.Lock()
+
+	var trechosReserva []Trecho
+	var valorTotal float64
+
 	for _, idTrecho := range idsTrechos {
 		trecho, existe := g.Trechos[idTrecho]
 		if !existe {
@@ -348,17 +322,23 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 			return false, fmt.Sprintf("O trecho de %s para %s esgotou as vagas!", trecho.Origem, trecho.Destino), ""
 		}
 	}
+
 	for _, idTrecho := range idsTrechos {
 		g.Trechos[idTrecho].AssentosOcupados++
+		trechosReserva = append(trechosReserva, *g.Trechos[idTrecho])
+		valorTotal += g.Trechos[idTrecho].Valor
 	}
 	g.muTrechos.Unlock()
 
 	reservaID := fmt.Sprintf("res_%d", time.Now().UnixNano())
 	g.muReservas.Lock()
 	g.Reservas[reservaID] = &Reserva{
-		ID: reservaID, PassageiroID: passageiroID,
-		IDsTrechos: append([]string(nil), idsTrechos...),
-		Data:       time.Now().Format("02/01/2006"),
+		ID:           reservaID,
+		PassageiroID: passageiroID,
+		IDsTrechos:   append([]string(nil), idsTrechos...),
+		Data:         time.Now().Format("02/01/2006"),
+		Trechos:      trechosReserva,
+		ValorTotal:   valorTotal,
 	}
 	g.muReservas.Unlock()
 	g.muOperacoes.Unlock()
@@ -367,7 +347,6 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 	return true, "Itinerário reservado com sucesso!", reservaID
 }
 
-// ListarReservasPassageiro busca todas as reservas ativas do passageiro
 func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map[string]interface{} {
 	g.muReservas.RLock()
 	reservas := cloneReservas(g.Reservas)
@@ -381,16 +360,23 @@ func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map
 		if res.PassageiroID == passageiroID {
 			var trechosReserva []Trecho
 			var valorTotal float64
-			for _, idT := range res.IDsTrechos {
-				idLocal := idT
-				if barra := strings.LastIndex(idT, "/"); barra >= 0 {
-					idLocal = idT[barra+1:]
-				}
-				if t, ok := g.Trechos[idLocal]; ok {
-					trechosReserva = append(trechosReserva, *t)
-					valorTotal += t.Valor
+
+			if len(res.Trechos) > 0 {
+				trechosReserva = res.Trechos
+				valorTotal = res.ValorTotal
+			} else {
+				for _, idT := range res.IDsTrechos {
+					idLocal := idT
+					if barra := strings.LastIndex(idT, "/"); barra >= 0 {
+						idLocal = idT[barra+1:]
+					}
+					if t, ok := g.Trechos[idLocal]; ok {
+						trechosReserva = append(trechosReserva, *t)
+						valorTotal += t.Valor
+					}
 				}
 			}
+
 			lista = append(lista, map[string]interface{}{
 				"id_reserva":  res.ID,
 				"itens":       res.Itens,
@@ -402,7 +388,6 @@ func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map
 	return lista
 }
 
-// CancelarReservaPassageiro libera os assentos de volta no sistema e deleta a reserva
 func (g *GerenciadorDeRotas) CancelarReservaPassageiro(passageiroID, reservaID string) (bool, string) {
 	g.muOperacoes.Lock()
 
@@ -419,7 +404,11 @@ func (g *GerenciadorDeRotas) CancelarReservaPassageiro(passageiroID, reservaID s
 
 	g.muTrechos.Lock()
 	for _, idTrecho := range idsTrechos {
-		if trecho, ok := g.Trechos[idTrecho]; ok && trecho.AssentosOcupados > 0 {
+		idLocal := idTrecho
+		if barra := strings.LastIndex(idTrecho, "/"); barra >= 0 {
+			idLocal = idTrecho[barra+1:]
+		}
+		if trecho, ok := g.Trechos[idLocal]; ok && trecho.AssentosOcupados > 0 {
 			trecho.AssentosOcupados--
 		}
 	}
