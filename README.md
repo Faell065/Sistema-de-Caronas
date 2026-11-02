@@ -127,10 +127,9 @@ A comunicação entre empresas inclui recursos de identidade, busca local, consu
 
 ## Limites conhecidos
 
-- A solução não foi validada em computadores físicos separados.
 - Timeout não é tratado como autorização automática de commit ou abort.
 - Transações preparadas podem aguardar quando coordenador ou participante estiver indisponível.
-- Não há consenso, replicação distribuída ou tolerância a perda permanente de disco.
+- Não há tolerância a perda permanente de disco.
 - A autenticação HMAC protege integridade entre servidores conhecidos, mas não substitui autorização, gerenciamento seguro de certificados ou confiança do participante.
 
 ## Documentação histórica
