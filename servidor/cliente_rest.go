@@ -25,6 +25,7 @@ func NovoClienteREST(empresaID, chaveHMAC string, timeout time.Duration) *Client
 	}
 }
 
+// Chamar envia mensagens HTTP incluindo headers Custom para roteamento idempotente (segurança)
 func (c *ClienteREST) Chamar(methodo, url, idempotencyKey string, corpo interface{}) (int, []byte, error) {
 	var payload []byte
 	var err error
@@ -41,9 +42,12 @@ func (c *ClienteREST) Chamar(methodo, url, idempotencyKey string, corpo interfac
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-VaiJunto-Empresa-ID", c.EmpresaID)
-	request.Header.Set("X-VaiJunto-Idempotency-Key", idempotencyKey)
+	request.Header.Set("X-VaiJunto-Idempotency-Key", idempotencyKey) // Impede commits duplicados
+	
 	timestamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 	request.Header.Set("X-VaiJunto-Timestamp", timestamp)
+	
+	// Adiciona segurança assinando os dados vitais via SHA256 HMAC (Autenticação Forte)
 	if c.ChaveHMAC != "" {
 		assinatura := AssinarCorpo(c.ChaveHMAC, methodo, request.URL.RequestURI(), timestamp, c.EmpresaID, idempotencyKey, string(payload))
 		request.Header.Set("X-VaiJunto-Signature", assinatura)
@@ -58,6 +62,8 @@ func (c *ClienteREST) Chamar(methodo, url, idempotencyKey string, corpo interfac
 	return response.StatusCode, resposta, err
 }
 
+// ChamarComRepeticao implementa um sistema Retry Backoff simples de tempo estendido,
+// ajudando a plataforma a se curar sozinha contra flutuações rápidas de rede entre instâncias.
 func (c *ClienteREST) ChamarComRepeticao(methodo, url, idempotencyKey string, corpo interface{}, tentativas int) (int, []byte, error) {
 	if tentativas < 1 {
 		tentativas = 1

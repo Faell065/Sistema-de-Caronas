@@ -1,5 +1,8 @@
 package protocolo
 
+//padronizam a comunicação via TCP puro
+// utilizando enquadramento de mensagens baseadas em delimitador (newline \n).
+
 type Requisicao struct {
 	TipoAcao       string                 `json:"tipo_acao"`
 	TipoUsuario    string                 `json:"tipo_usuario"`

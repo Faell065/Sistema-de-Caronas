@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// Testa se a coordenação se auto-conclui corretamente quando os trechos pertencem somente a si mesmo
 func TestCoordenadorReservaSomenteLocal(t *testing.T) {
 	dir := t.TempDir()
 	g := dominio.NovoGerenciadorComDiretorio(dir)
@@ -34,6 +35,7 @@ func TestCoordenadorReservaSomenteLocal(t *testing.T) {
 	}
 }
 
+// Testa se uma recusa do Participante B faz o Coordenador A reverter os Assentos Preparados de A
 func TestCoordenadorAbortaHoldLocalQuandoParticipanteRemotoRecusa(t *testing.T) {
 	participante := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := http.Header{}
@@ -72,6 +74,7 @@ func TestCoordenadorAbortaHoldLocalQuandoParticipanteRemotoRecusa(t *testing.T) 
 	}
 }
 
+// Testa Partição de Rede e garante que estado de aborta seja persistido no disco.
 func TestCoordenadorIndisponibilidadeRemotaAbortaEChegaAoEstadoPersistido(t *testing.T) {
 	dir := t.TempDir()
 	g := dominio.NovoGerenciadorComDiretorio(dir)
@@ -106,6 +109,7 @@ func TestCoordenadorIndisponibilidadeRemotaAbortaEChegaAoEstadoPersistido(t *tes
 	}
 }
 
+// Testa se a Busca contorna o timeout de pares que estejam caídos no momento
 func TestBuscaDistribuidaIndicaFalhaSemPerderResultadoLocal(t *testing.T) {
 	dir := t.TempDir()
 	g := dominio.NovoGerenciadorComDiretorio(dir)

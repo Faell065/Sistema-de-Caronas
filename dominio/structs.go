@@ -1,5 +1,6 @@
 package dominio
 
+// Estruturas de Entidades 
 type Trecho struct {
 	ID                 string  `json:"id"`
 	RotaID             string  `json:"rota_id"`
@@ -11,12 +12,13 @@ type Trecho struct {
 	HorarioChegada     int     `json:"horario_chegada"`
 	AssentosTotais     int     `json:"assentos_totais"`
 	AssentosOcupados   int     `json:"assentos_ocupados"`
-	AssentosPreparados int     `json:"assentos_preparados,omitempty"`
+	AssentosPreparados int     `json:"assentos_preparados,omitempty"` // Holds do Two-Phase Commit
 	Valor              float64 `json:"valor"`
 	EmpresaID          string  `json:"empresa_id,omitempty"`
 	Recurso            string  `json:"recurso,omitempty"`
 }
 
+// Constantes marcadoras da transição de estados locais no Participante (2PC)
 const (
 	EstadoTransacaoPreparando       = "PREPARANDO"
 	EstadoTransacaoPreparado        = "PREPARADO"
@@ -33,6 +35,7 @@ type ItemTransacao struct {
 	Quantidade int    `json:"quantidade"`
 }
 
+// TransacaoLocal descreve o Log transacional armazenado em cada nó Participante
 type TransacaoLocal struct {
 	ID                    string          `json:"id"`
 	CoordenadorID         string          `json:"coordenador_id"`
@@ -55,6 +58,7 @@ type EstadoParticipante struct {
 	Estado    string `json:"estado"`
 }
 
+// TransacaoCoordenador descreve a tabela de liderança armazenada no nó Coordenador
 type TransacaoCoordenador struct {
 	ID             string               `json:"id"`
 	CoordenadorID  string               `json:"coordenador_id"`
@@ -99,6 +103,7 @@ type Reserva struct {
 	ValorTotal   float64         `json:"valor_total,omitempty"`
 }
 
+// Constantes de Liderança do Coordenador do 2PC
 const (
 	EstadoCoordenadorInit        = "INIT"
 	EstadoCoordenadorPreparando  = "PREPARANDO"

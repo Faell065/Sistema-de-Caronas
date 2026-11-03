@@ -1,5 +1,7 @@
 package dominio
 
+// TransacoesQuePrecisamRecuperacao varre o banco local à procura de logs do 2PC que
+// foram interrompidos na fase PREPARED caso o servidor sofra um crash (queda de energia).
 func (g *GerenciadorDeRotas) TransacoesQuePrecisamRecuperacao() []TransacaoLocal {
 	g.muTransacoes.RLock()
 	defer g.muTransacoes.RUnlock()
@@ -14,6 +16,7 @@ func (g *GerenciadorDeRotas) TransacoesQuePrecisamRecuperacao() []TransacaoLocal
 	return resultado
 }
 
+// TransacoesCoordenadorasParaRetomar recupera transações globais pausadas.
 func (g *GerenciadorDeRotas) TransacoesCoordenadorasParaRetomar() []TransacaoCoordenador {
 	g.muTransacoes.RLock()
 	defer g.muTransacoes.RUnlock()
@@ -29,6 +32,7 @@ func (g *GerenciadorDeRotas) TransacoesCoordenadorasParaRetomar() []TransacaoCoo
 	return resultado
 }
 
+// TransacoesComDecisaoPersistida resgata as respostas (COMMIT ou ABORT) e reencontra os logs.
 func (g *GerenciadorDeRotas) TransacoesComDecisaoPersistida() []TransacaoCoordenador {
 	g.muTransacoes.RLock()
 	defer g.muTransacoes.RUnlock()

@@ -12,6 +12,8 @@ import (
 	"projeto_redes/dominio"
 )
 
+// O "Teste de Estresse de Venda Duplicada". B e C mandam a Fase 1 ao mesmo instante 
+// disputando a única (1) vaga física na empresa A. A engine Mutex garante a rejeição do 2º Coordenador.
 func TestDisputaUltimaVagaEntreDoisCoordenadores(t *testing.T) {
 	ownerConfig := configuracao.Configuracao{
 		Empresa:     configuracao.Empresa{ID: "empresa_a", Nome: "A", URL: "http://empresa_a:8081"},
@@ -66,6 +68,7 @@ func TestDisputaUltimaVagaEntreDoisCoordenadores(t *testing.T) {
 	}
 }
 
+// Testa a Idempotência: Se o Retry disparar 2 ou 3 pedidos de Commit idênticos, não deduz 2 vagas.
 func TestMensagensRepetidasNaoDuplicamCommit(t *testing.T) {
 	dir := t.TempDir()
 	g := dominio.NovoGerenciadorComDiretorio(dir)

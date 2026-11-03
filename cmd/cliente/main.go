@@ -39,6 +39,7 @@ func main() {
 
 	fmt.Printf("[CONECTANDO] Servidor configurado para: %s\n", enderecoServidor)
 
+	// Loop principal de interação do cliente CLI
 	for {
 		fmt.Println("\n========================================")
 		fmt.Println("      VAIJUNTO - MENU PRINCIPAL         ")
@@ -67,6 +68,7 @@ func main() {
 	}
 }
 
+// fluxoAutenticacao gerencia os menus de entrada baseados no tipo do usuário
 func fluxoAutenticacao(reader *bufio.Reader, tipoUsuario string) {
 	for {
 		fmt.Printf("\n--- MENU %s ---\n", strings.ToUpper(tipoUsuario))
@@ -100,6 +102,7 @@ func fluxoAutenticacao(reader *bufio.Reader, tipoUsuario string) {
 	}
 }
 
+// realizarCadastro coleta dados locais e envia requisição de criação ao servidor TCP
 func realizarCadastro(reader *bufio.Reader, tipoUsuario string) {
 	fmt.Print("Insira seu Nome Completo: ")
 	nome, _ := reader.ReadString('\n')
@@ -129,6 +132,7 @@ func realizarCadastro(reader *bufio.Reader, tipoUsuario string) {
 	}
 }
 
+// realizarLoginComRetorno valida as credenciais via TCP e devolve o ID se for bem-sucedido
 func realizarLoginComRetorno(reader *bufio.Reader, tipoUsuario string) (bool, string) {
 	fmt.Print("Insira seu ID de Usuário: ")
 	idUsuario, _ := reader.ReadString('\n')
@@ -158,6 +162,8 @@ func realizarLoginComRetorno(reader *bufio.Reader, tipoUsuario string) (bool, st
 	return false, ""
 }
 
+// enviarRequisicao encapsula o padrão de comunicação do cliente TCP (Short-lived connection, de curta duração).
+// O cliente conecta, envia a string JSON terminada em '\n', aguarda resposta e desconecta.
 func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
 	conn, err := net.Dial("tcp", enderecoServidor)
 	if err != nil {
@@ -170,11 +176,13 @@ func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
 		return protocolo.Resposta{}, err
 	}
 
+	// anexa '\n' para o servidor saber onde a mensagem termina
 	_, err = conn.Write(append(bytesReq, '\n'))
 	if err != nil {
 		return protocolo.Resposta{}, err
 	}
 
+	// Bloqueia e aguarda resposta do servidor até a quebra de linha
 	respostaBytes, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
 		return protocolo.Resposta{}, err
@@ -189,6 +197,7 @@ func enviarRequisicao(req protocolo.Requisicao) (protocolo.Resposta, error) {
 	return resp, nil
 }
 
+// menuMotorista gerencia o fluxo operacional de cadastro de trechos (grafo de rotas)
 func menuMotorista(reader *bufio.Reader, idMotorista string) {
 	for {
 		fmt.Printf("\n--- MOTORISTA LOGADO (%s) ---\n", idMotorista)
@@ -314,6 +323,7 @@ func menuMotorista(reader *bufio.Reader, idMotorista string) {
 	}
 }
 
+// menuPassageiro exibe opções de visualização, busca distribuída e reserva em duas fases (2PC)
 func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 	for {
 		fmt.Printf("\n--- PASSAGEIRO LOGADO (%s) ---\n", idPassageiro)
@@ -397,6 +407,7 @@ func menuPassageiro(reader *bufio.Reader, idPassageiro string) {
 				})
 			}
 
+			// Monta a requisição de reserva distribuída. O servidor atuará como Coordenador do 2PC.
 			reqReserva := protocolo.Requisicao{
 				TipoAcao:     "RESERVAR_ITINERARIO",
 				IDUsuario:    idPassageiro,

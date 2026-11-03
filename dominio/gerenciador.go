@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// CriarRota constrói a estrutura em grafo a partir de uma lista sequencial de cidades
 func CriarRota(id string, motoristaID string, paradas []string, assentos int) Rota {
 	var trechos []Trecho
 	for i := 0; i < len(paradas)-1; i++ {
@@ -27,6 +28,8 @@ func CriarRota(id string, motoristaID string, paradas []string, assentos int) Ro
 	}
 }
 
+// GerenciadorDeRotas contém o estado principal em memória. O sistema utiliza
+// sync.RWMutex segmentados para reduzir disputa de travas.
 type GerenciadorDeRotas struct {
 	diretorioDados string
 
@@ -45,6 +48,7 @@ type GerenciadorDeRotas struct {
 	SequenciaPrecedencia  uint64
 }
 
+// NovoGerenciadorComDiretorio instancializa e recarrega os dados do JSON persistente.
 func NovoGerenciadorComDiretorio(diretorio string) *GerenciadorDeRotas {
 	g := &GerenciadorDeRotas{
 		diretorioDados:        diretorio,
@@ -62,6 +66,7 @@ func NovoGerenciador() *GerenciadorDeRotas {
 	return NovoGerenciadorComDiretorio("dados")
 }
 
+// CadastrarUsuario utiliza mutex exclusivo para evitar conflito na alocação de IDs.
 func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string, error) {
 	g.muUsuarios.Lock()
 
@@ -88,6 +93,7 @@ func (g *GerenciadorDeRotas) CadastrarUsuario(nome, senha, tipo string) (string,
 	return idGerado, nil
 }
 
+// Autenticar exige apenas trava de leitura, permitindo logins paralelos simultâneos.
 func (g *GerenciadorDeRotas) Autenticar(idUsuario, senha, tipo string) (bool, *Usuario) {
 	g.muUsuarios.RLock()
 	defer g.muUsuarios.RUnlock()
@@ -126,12 +132,15 @@ func (g *GerenciadorDeRotas) ObterTrecho(id string) (*Trecho, bool) {
 	return &copiado, true
 }
 
+// BuscarItinerarios executa uma Busca em Profundidade (DFS) assíncrona sobre as rotas em memória.
+// Ela avalia a conectividade (Origem/Destino) e o espaço amostral de vagas livres e horários.
 func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []Itinerario {
 	g.muTrechos.RLock()
 	defer g.muTrechos.RUnlock()
 
 	var trechosValidos []Trecho
 	for _, t := range g.Trechos {
+		// Deduz as vagas em hold (preparadas em 2PC) para não gerar overbooking durante transações ativas.
 		livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
 		if t.Data == data && livres > 0 {
 			trechosValidos = append(trechosValidos, *t)
@@ -166,9 +175,12 @@ func (g *GerenciadorDeRotas) BuscarItinerarios(origem, destino, data string) []I
 		}
 
 		for _, t := range trechosValidos {
+			// Não re-visita arestas já incluídas no caminho para evitar ciclos infinitos no DFS
 			if t.Origem == cidadeAtual && !visitados[t.ID] {
 				visitados[t.ID] = true
 
+				// Restrição temporal e de causalidade: Um trecho não pode ser percorrido
+				// se sair ANTES da chegada na cidade intermediária anterior.
 				if len(caminhoAtual) > 0 {
 					trechoAnterior := caminhoAtual[len(caminhoAtual)-1]
 					if t.HorarioSaida < trechoAnterior.HorarioChegada {
@@ -267,6 +279,9 @@ type TxAfetada struct {
 	CoordenadorID string
 }
 
+// CancelarRotaMotorista desencadeia exclusão em cascata. Se uma rota apagada pelo motorista
+// pertencia a transações distribuídas ativas, retorna os Metadados (TxAfetada)
+// para o servidor disparar cancelamentos (FORCAR_CANCELAMENTO) globalmente.
 func (g *GerenciadorDeRotas) CancelarRotaMotorista(motoristaID, rotaID string) (bool, string, []TxAfetada) {
 	g.muOperacoes.Lock()
 	g.muTrechos.Lock()
@@ -348,6 +363,8 @@ func (g *GerenciadorDeRotas) RemoverReservaForcada(reservaID string) ([]ItemTran
 	return itens, true
 }
 
+// ReservarItinerarioComID é utilizado em rotas puramente locais. Verifica atomicamente se todos os
+// trechos continuam disponíveis (Fase 1) e deduz a vaga (Fase 2) de uma vez sob Lock total.
 func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTrechos []string) (bool, string, string) {
 	g.muOperacoes.Lock()
 	g.muTrechos.Lock()
@@ -355,6 +372,7 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 	var trechosReserva []Trecho
 	var valorTotal float64
 
+	// Primeira etapa: Valida a atomicidade multi-trecho
 	for _, idTrecho := range idsTrechos {
 		trecho, existe := g.Trechos[idTrecho]
 		if !existe {
@@ -369,6 +387,7 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 		}
 	}
 
+	// Segunda etapa: Efetivação
 	for _, idTrecho := range idsTrechos {
 		g.Trechos[idTrecho].AssentosOcupados++
 		trechosReserva = append(trechosReserva, *g.Trechos[idTrecho])
@@ -395,7 +414,7 @@ func (g *GerenciadorDeRotas) ReservarItinerarioComID(passageiroID string, idsTre
 
 func (g *GerenciadorDeRotas) ListarReservasPassageiro(passageiroID string) []map[string]interface{} {
 	g.muReservas.RLock()
-	reservas := cloneReservas(g.Reservas)
+	reservas := cloneReservas(g.Reservas) // Presume-se implementação local na camada JSON
 	g.muReservas.RUnlock()
 
 	g.muTrechos.RLock()
@@ -455,7 +474,7 @@ func (g *GerenciadorDeRotas) CancelarReservaPassageiro(passageiroID, reservaID s
 			idLocal = idTrecho[barra+1:]
 		}
 		if trecho, ok := g.Trechos[idLocal]; ok && trecho.AssentosOcupados > 0 {
-			trecho.AssentosOcupados--
+			trecho.AssentosOcupados-- // Recicla e libera fisicamente as vagas da reserva
 		}
 	}
 	g.muTrechos.Unlock()

@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// AssinarCorpo impede interceptação ou fraude na API Rest via Hash Criptográfico.
 func AssinarCorpo(chave, metodo, caminho, timestamp, empresaID, idempotencyKey, corpo string) string {
 	base := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", metodo, caminho, timestamp, empresaID, idempotencyKey, corpo)
 	mac := hmac.New(sha256.New, []byte(chave))
@@ -17,6 +18,8 @@ func AssinarCorpo(chave, metodo, caminho, timestamp, empresaID, idempotencyKey, 
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// ValidarAssinatura checa o HMAC no lado do receptor e embute uma verificação estrita
+// de atraso (+- 300 segundos). Isso impede os temidos ataques de Replay (Replay Attacks).
 func ValidarAssinatura(chave string, r *http.Request, corpo []byte) bool {
 	if chave == "" {
 		return true

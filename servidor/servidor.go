@@ -20,7 +20,7 @@ type Servidor struct {
 	Configuracao *configuracao.Configuracao
 
 	muLamport sync.Mutex
-	Lamport   uint64
+	Lamport   uint64 // Relógio Lógico para marcação temporal distribuída e eventual ordenação causal
 }
 
 func NovoServidor() *Servidor {
@@ -46,6 +46,8 @@ func (s *Servidor) Iniciar(porta string) {
 	}
 }
 
+// atenderCliente representa a camada de Aplicação Socket. Ele utiliza
+// '\n' como limitador do final de stream do payload JSON.
 func (s *Servidor) atenderCliente(conn net.Conn) {
 	defer conn.Close()
 

@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// ExecutarReservaDistribuida centraliza o protocolo Two-Phase Commit (2PC).
+// É este método que proíbe vendas parciais no sistema. 
+// A Reserva só nasce se todos (100%) dos Participantes confirmarem a Fase 1.
 func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []dominio.ItemTransacao, trechos []dominio.Trecho, valorTotal float64) (dominio.TransacaoCoordenador, error) {
 	if s.Configuracao == nil {
 		return dominio.TransacaoCoordenador{}, fmt.Errorf("configuração do servidor indisponível")
@@ -31,6 +34,8 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 
 	txID := fmt.Sprintf("tx_%s_%d", s.Configuracao.Empresa.ID, time.Now().UnixNano())
 	chave := txID
+	
+	// Grava status inicial para fins de log de falha e recuperação persistente
 	if err := s.Gerenciador.CriarTransacaoCoordenador(txID, chave, s.Configuracao.Empresa.ID, passageiroID, itens); err != nil {
 		return dominio.TransacaoCoordenador{}, err
 	}
@@ -47,6 +52,9 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 	cliente := NovoClienteREST(s.Configuracao.Empresa.ID, s.Configuracao.ChaveHMAC, 1500*time.Millisecond)
 	preparados := make([]string, 0, len(empresas))
 
+	// ============================================
+	// FASE 1: PREPARE (Pedido de hold das vagas)
+	// ============================================
 	for _, empresaID := range empresas {
 		txParticipante := dominio.TransacaoLocal{
 			ID: txID, CoordenadorID: s.Configuracao.Empresa.ID, EmpresaID: empresaID,
@@ -58,7 +66,7 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 			resultado, err := s.Gerenciador.PrepareReservaLocal(txParticipante)
 			if err != nil {
 				motivo := "prepare local recusado: " + err.Error()
-				s.abortarPreparados(txID, preparados, urls, cliente, motivo)
+				s.abortarPreparados(txID, preparados, urls, cliente, motivo) // Força Rollback geral
 				return s.estadoCoordenador(txID), fmt.Errorf("%s", motivo)
 			}
 			if resultado.Estado != dominio.EstadoTransacaoPreparado {
@@ -77,6 +85,8 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 			s.abortarPreparados(txID, preparados, urls, cliente, motivo)
 			return s.estadoCoordenador(txID), fmt.Errorf("%s", motivo)
 		}
+		
+		// Envia a instrução /prepare para o Servidor parceiro
 		status, body, err := cliente.ChamarComRepeticao(http.MethodPost,
 			strings.TrimRight(url, "/")+"/api/v1/transacoes/"+txID+"/prepare",
 			chave, txParticipante, 2)
@@ -87,7 +97,7 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 			} else {
 				motivo += ": HTTP " + string(body)
 			}
-			s.abortarPreparados(txID, preparados, urls, cliente, motivo)
+			s.abortarPreparados(txID, preparados, urls, cliente, motivo) // Força Rollback geral
 			return s.estadoCoordenador(txID), fmt.Errorf("%s", motivo)
 		}
 		preparados = append(preparados, empresaID)
@@ -97,6 +107,9 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 	_ = s.Gerenciador.SetEstadoCoordenador(txID, dominio.EstadoCoordenadorPreparedAll)
 	_ = s.Gerenciador.SetEstadoCoordenador(txID, dominio.EstadoCoordenadorCommitted)
 
+	// ============================================
+	// FASE 2: COMMIT (Efetivação Atômica)
+	// ============================================
 	for _, empresaID := range empresas {
 		if empresaID == s.Configuracao.Empresa.ID {
 			if _, err := s.Gerenciador.CommitReservaLocal(txID); err != nil {
@@ -123,6 +136,7 @@ func (s *Servidor) ExecutarReservaDistribuida(passageiroID string, itens []domin
 	return s.estadoCoordenador(txID), nil
 }
 
+// abortarPreparados dispara chamadas /abort se QUALQUER nó quebrar na Fase 1.
 func (s *Servidor) abortarPreparados(txID string, preparados []string, urls map[string]string, cliente *ClienteREST, motivo string) {
 	_ = s.Gerenciador.SetEstadoCoordenador(txID, dominio.EstadoCoordenadorAborted)
 	for _, empresaID := range preparados {
@@ -168,6 +182,8 @@ func (s *Servidor) TransacaoEmJSON(tx dominio.TransacaoCoordenador) []byte {
 	return body
 }
 
+// RecuperarTransacoes garante a tolerância a falhas. Se a luz cair entre a Fase 1 e Fase 2,
+// na inicialização o nó coordenador vasculha quem ficou com assento travado no Limbo e decide o fim.
 func (s *Servidor) RecuperarTransacoes() {
 	if s.Configuracao == nil {
 		return

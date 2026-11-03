@@ -7,6 +7,8 @@ import (
 	"projeto_redes/servidor"
 )
 
+// Ponto de entrada do Servidor. Ele lê o JSON de configuração via flag
+// e inicializa as goroutines responsáveis pelas portas TCP (CLI) e HTTP (REST).
 func main() {
 	caminho := flag.String("config", "config/empresa_a.json", "arquivo de configuração da empresa")
 	flag.Parse()

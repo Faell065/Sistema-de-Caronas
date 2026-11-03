@@ -23,6 +23,10 @@ type RespostaBuscaDistribuida struct {
 	Falhas    []string             `json:"falhas,omitempty"`
 }
 
+// BuscarDistribuido compõe o Grafo Centralizado Descentralizado:
+// A empresa "A" aciona "B" e "C" (os Pares) via API REST para recolher todos os trechos
+// em um "catalogo" temporário. Em seguida roda um DFS (Busca em Profundidade) local 
+// unindo os fragmentos e traçando o caminho multi-empresa.
 func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBuscaDistribuida {
 	if s.Configuracao == nil {
 		return RespostaBuscaDistribuida{}
@@ -31,6 +35,8 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 	cliente := NovoClienteREST(s.Configuracao.Empresa.ID, s.Configuracao.ChaveHMAC, 1500*time.Millisecond)
 
 	catalogo := make([]TrechoRest, 0)
+	
+	// Passo 1: Insere as rotas locais da própria Empresa A no catálogo
 	locais := s.Gerenciador.BuscarItinerarios(origem, destino, data)
 	for _, local := range locais {
 		for _, trecho := range local.Trechos {
@@ -38,6 +44,7 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 		}
 	}
 
+	// Passo 2: Puxa RESTs remotas dos peers na mesma data
 	pares := append([]configuracao.Empresa(nil), s.Configuracao.Pares...)
 	sort.Slice(pares, func(i, j int) bool { return pares[i].ID < pares[j].ID })
 	for _, par := range pares {
@@ -60,6 +67,8 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 
 	visitados := make(map[string]bool)
 	var dfs func(string, []TrechoRest, float64, int)
+	
+	// Passo 3: Executa DFS misturando peças recebidas de A, B e C.
 	dfs = func(cidade string, caminho []TrechoRest, valor float64, minimo int) {
 		if cidade == destino && len(caminho) > 0 {
 			resposta.Caminhos = append(resposta.Caminhos, CaminhoDistribuido{
@@ -69,6 +78,7 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 			})
 			return
 		}
+		// Limite imposto (profundidade máx 4) para evitar saturação e timeout na rede.
 		if len(caminho) >= 4 {
 			return
 		}
@@ -77,6 +87,7 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 			if trecho.Origem != cidade || visitados[chave] {
 				continue
 			}
+			// Verifica ordem cronológica de viagens multi-hop
 			if len(caminho) > 0 && trecho.HorarioSaida < caminho[len(caminho)-1].HorarioChegada {
 				continue
 			}

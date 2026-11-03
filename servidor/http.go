@@ -56,6 +56,8 @@ type DecisaoTransacaoRest struct {
 	Lamport uint64 `json:"lamport,omitempty"`
 }
 
+// NovoServidorConfigurado é o "cérebro" de inicialização. Restaura dados,
+// liga os daemons de fundo (Background goroutines) e varre lixos residuais.
 func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 	servidor := &Servidor{
 		Gerenciador:  dominio.NovoGerenciadorComDiretorio(c.DiretorioDados),
@@ -67,9 +69,12 @@ func NovoServidorConfigurado(c configuracao.Configuracao) *Servidor {
 	for _, tx := range servidor.Gerenciador.TransacoesCoordenadorasParaRetomar() {
 		fmt.Printf("[RECUPERAÇÃO] Transação coordenadora deve ser retomada: %s estado=%s\n", tx.ID, tx.Estado)
 	}
+	
+	// Goroutine de Recuperação de Estado pós-crash
 	go servidor.RecuperarTransacoes()
 
-	// Goroutine de limpeza periódica de transações preparadas expiradas (TTL 3 minutos)
+	// Goroutine de limpeza periódica de transações preparadas expiradas (TTL 3 minutos).
+	// Soluciona o vazamento de vagas em caso de isolamento de rede do Participante.
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -115,6 +120,7 @@ func HandlerEmpresa(e configuracao.Empresa) http.Handler {
 	return mux
 }
 
+// HandlerEmpresaComGerenciador declara os Endpoints da API REST (Comunicação Server-to-Server)
 func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.GerenciadorDeRotas, configuracoes ...configuracao.Configuracao) http.Handler {
 	chaveHMAC := ""
 	if len(configuracoes) > 0 {
@@ -193,7 +199,6 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 
 		// Adiciona também trechos avulsos daquela data, ignorando os que já formaram itinerários
 		for _, t := range g.Trechos {
-			// NOVA LINHA (impede a duplicação do Problema 1)
 			if trechosAdicionados[t.ID] {
 				continue 
 			}
@@ -237,6 +242,7 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 		escreverJSON(w, http.StatusOK, servidorDistribuido.BuscarDistribuido(req.Origem, req.Destino, req.Data))
 	})
 
+	// Endpoint central que processa os Verbos do Two-Phase Commit distribuído
 	mux.HandleFunc("/api/v1/transacoes/", func(w http.ResponseWriter, r *http.Request) {
 		caminho := strings.TrimPrefix(r.URL.Path, "/api/v1/transacoes/")
 		partes := strings.Split(strings.Trim(caminho, "/"), "/")
@@ -342,7 +348,9 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 				return
 			}
 			escreverJSON(w, http.StatusOK, resultado)
-			case "forcar_cancelamento":
+		// forcar_cancelamento: Acionado quando um motorista limpa as rotas, invalidando
+		// viagens de passageiros que haviam confirmado multi-trechos. Propaga em cascata o Cancelar.
+		case "forcar_cancelamento":
 			if len(configuracoes) > 0 {
 				if itens, existe := g.RemoverReservaForcada(txID); existe {
 					for _, item := range itens {
@@ -370,6 +378,8 @@ func HandlerEmpresaComGerenciador(e configuracao.Empresa, g *dominio.Gerenciador
 	return mux
 }
 
+// Executar faz o Bind nas portas com goroutines independentes. 
+// Uma escuta tráfego REST (Servidor<->Servidor) e a outra escuta chamadas TCP (CLI->Servidor)
 func (s *Servidor) Executar(c configuracao.Configuracao) error {
 	if err := c.Validar(); err != nil {
 		return err
@@ -404,7 +414,7 @@ func (s *Servidor) atenderConexoes(listener net.Listener) error {
 		if err != nil {
 			return err
 		}
-		go s.atenderCliente(conn)
+		go s.atenderCliente(conn) // Goroutine injetada para suportar clientes TCP simultâneos
 	}
 }
 

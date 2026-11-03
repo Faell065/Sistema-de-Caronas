@@ -27,7 +27,8 @@ type Configuracao struct {
 	ChaveHMAC      string    `json:"chave_hmac,omitempty"`
 }
 
-// Carregar não consulta a rede: um par fora do ar não impede a inicialização.
+// Carregar faz o parse do arquivo config.json da respectiva empresa.
+// Não consulta a rede neste momento, para garantir tolerância a falhas na inicialização.
 // Caminhos relativos de dados usam a pasta do arquivo JSON como referência.
 func Carregar(caminho string) (Configuracao, error) {
 	var c Configuracao
@@ -55,6 +56,8 @@ func Carregar(caminho string) (Configuracao, error) {
 	return c, err
 }
 
+// Validar verifica integridade de portas de rede (TCP e HTTP não podem colidir) 
+// e garante que não existem pares (peers) duplicados na lista de rotas REST.
 func (c Configuracao) Validar() error {
 	for _, endereco := range []string{c.EnderecoTCP, c.EnderecoHTTP} {
 		_, porta, err := net.SplitHostPort(endereco)

@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// CriarTransacaoCoordenador inicia a máquina de estados global (no papel de Coordenador do 2PC).
+// Registra as intenções de reserva e as empresas participantes antes da chamada HTTP/REST remota.
 func (g *GerenciadorDeRotas) CriarTransacaoCoordenador(txID, chave, coordenadorID, passageiroID string, itens []ItemTransacao) error {
 	if txID == "" || chave == "" {
 		return fmt.Errorf("tx_id e chave de idempotência são obrigatórios")
@@ -31,6 +33,7 @@ func (g *GerenciadorDeRotas) CriarTransacaoCoordenador(txID, chave, coordenadorI
 		}
 		return nil
 	}
+	// Salva as intenções antes de avisar os participantes
 	record := &TransacaoCoordenador{
 		ID: txID, CoordenadorID: coordenadorID, Estado: EstadoCoordenadorInit,
 		IdempotencyKey: chave, PassageiroID: passageiroID,
@@ -44,6 +47,7 @@ func (g *GerenciadorDeRotas) CriarTransacaoCoordenador(txID, chave, coordenadorI
 	return g.SalvarDados()
 }
 
+// SetEstadoCoordenador atualiza persistentemente o progresso global da transação.
 func (g *GerenciadorDeRotas) SetEstadoCoordenador(txID, estado string) error {
 	g.muTransacoes.Lock()
 	tx, existe := g.TransacoesCoordenador[txID]
@@ -56,6 +60,7 @@ func (g *GerenciadorDeRotas) SetEstadoCoordenador(txID, estado string) error {
 	return g.SalvarDados()
 }
 
+// SetEstadoParticipanteCoordenador marca em qual fase um participante individual está.
 func (g *GerenciadorDeRotas) SetEstadoParticipanteCoordenador(txID, empresaID, estado string) error {
 	g.muTransacoes.Lock()
 	tx, existe := g.TransacoesCoordenador[txID]
@@ -87,6 +92,8 @@ func (g *GerenciadorDeRotas) ConsultarTransacaoCoordenador(txID string) (Transac
 	return copia, true
 }
 
+// CriarReservaDistribuida consolida no banco de dados local a posse do itinerário inter-empresas 
+// associado ao passageiro, após a fase 2 (Commit) ser bem-sucedida.
 func (g *GerenciadorDeRotas) CriarReservaDistribuida(txID, empresaID, passageiroID string, itens []ItemTransacao, trechos []Trecho, valorTotal float64) error {
 	g.muReservas.Lock()
 	ids := make([]string, 0, len(itens))
@@ -107,6 +114,7 @@ func (g *GerenciadorDeRotas) CriarReservaDistribuida(txID, empresaID, passageiro
 	return g.SalvarDados()
 }
 
+// RemoverReservaDistribuida exclui os artefatos de uma reserva global caso o passageiro solicite cancelamento.
 func (g *GerenciadorDeRotas) RemoverReservaDistribuida(passageiroID, reservaID string) ([]ItemTransacao, bool) {
 	g.muReservas.Lock()
 	reserva, existe := g.Reservas[reservaID]
