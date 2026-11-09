@@ -36,11 +36,12 @@ func (s *Servidor) BuscarDistribuido(origem, destino, data string) RespostaBusca
 
 	catalogo := make([]TrechoRest, 0)
 	
-	// Passo 1: Insere as rotas locais da própria Empresa A no catálogo
-	locais := s.Gerenciador.BuscarItinerarios(origem, destino, data)
-	for _, local := range locais {
-		for _, trecho := range local.Trechos {
-			catalogo = append(catalogo, trechoRest(s.Configuracao.Empresa, trecho))
+	// Passo 1: Insere as rotas avulsas locais da própria Empresa no catálogo
+	// Correção: Pega todos os trechos da data (inclusive os que não chegam no destino final sozinhos)
+	for _, t := range s.Gerenciador.Trechos {
+		livres := t.AssentosTotais - t.AssentosOcupados - t.AssentosPreparados
+		if t.Data == data && livres > 0 {
+			catalogo = append(catalogo, trechoRest(s.Configuracao.Empresa, *t))
 		}
 	}
 
